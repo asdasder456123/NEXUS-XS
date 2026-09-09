@@ -26,42 +26,21 @@ echo "[cloudflared] Installing for Linux architecture: $ARCH"
 echo "[cloudflared] Downloading from: $URL"
 
 node - "$URL" "$BIN" <<'NODE'
-import fs from "node:fs";
-import { Readable } from "node:stream";
+import fs from "node:fs/promises";
 
 const [url, output] = process.argv.slice(2);
 
 const response = await fetch(url);
 
-if (!response.ok || !response.body) {
-  throw new Error(`Download failed: ${response.status} ${response.statusText}`);
+if (!response.ok) {
+  throw new Error(
+    `Download failed: ${response.status} ${response.statusText}`,
+  );
 }
 
-const file = fs.createWriteStream(output);
+const buffer = Buffer.from(await response.arrayBuffer());
 
-await Readable.fromWeb(response.body).pipeTo(
-  new WritableStream({
-    write(chunk) {
-      return new Promise((resolve, reject) => {
-        if (file.write(chunk)) {
-          resolve();
-        } else {
-          file.once("drain", resolve);
-          file.once("error", reject);
-        }
-      });
-    },
-    close() {
-      return new Promise((resolve, reject) => {
-        file.end(() => resolve());
-        file.once("error", reject);
-      });
-    },
-    abort(error) {
-      file.destroy(error);
-    },
-  }),
-);
+await fs.writeFile(output, buffer);
 NODE
 
 chmod +x "$BIN"
