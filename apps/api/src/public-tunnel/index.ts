@@ -1,4 +1,5 @@
 import { spawn, type ChildProcess } from "node:child_process";
+import path from "node:path";
 
 const WEB_URL = "http://127.0.0.1:5173";
 
@@ -14,7 +15,7 @@ function getDiscordToken(): string | undefined {
   return process.env.DISCORD_BOT_TOKEN;
 }
 
-async function announcePublicUrl(url: string) {
+async function announcePublicUrl(url: string): Promise<void> {
   if (url === lastAnnouncedUrl) {
     return;
   }
@@ -72,7 +73,7 @@ async function announcePublicUrl(url: string) {
   }
 }
 
-function handleOutput(chunk: Buffer) {
+function handleOutput(chunk: Buffer): void {
   const text = chunk.toString();
 
   process.stdout.write(`[Cloudflare] ${text}`);
@@ -90,7 +91,7 @@ function handleOutput(chunk: Buffer) {
   }
 }
 
-export async function startPublicTunnel() {
+export async function startPublicTunnel(): Promise<void> {
   if (tunnelProcess) {
     console.log("[Tunnel] Already running.");
     return;
@@ -106,7 +107,7 @@ export async function startPublicTunnel() {
 
   console.log(`[Tunnel] Using cloudflared: ${cloudflaredPath}`);
 
-  const process = spawn(
+  const child = spawn(
     cloudflaredPath,
     [
       "tunnel",
@@ -118,40 +119,43 @@ export async function startPublicTunnel() {
     },
   );
 
-  tunnelProcess = process;
+  tunnelProcess = child;
 
-  process.stdout?.on("data", handleOutput);
-  process.stderr?.on("data", handleOutput);
+  child.stdout?.on("data", handleOutput);
+  child.stderr?.on("data", handleOutput);
 
-  process.on("error", (error) => {
+  child.on("error", (error: Error) => {
     console.error("[Tunnel] Failed to start cloudflared:", error);
 
-    if (tunnelProcess === process) {
+    if (tunnelProcess === child) {
       tunnelProcess = null;
     }
   });
 
-  process.on("exit", (code, signal) => {
-    console.log(
-      `[Tunnel] cloudflared exited (code=${code}, signal=${signal ?? "none"})`,
-    );
+  child.on(
+    "exit",
+    (code: number | null, signal: NodeJS.Signals | null) => {
+      console.log(
+        `[Tunnel] cloudflared exited (code=${code}, signal=${signal ?? "none"})`,
+      );
 
-    if (tunnelProcess === process) {
-      tunnelProcess = null;
-    }
-  });
+      if (tunnelProcess === child) {
+        tunnelProcess = null;
+      }
+    },
+  );
 }
 
-export function stopPublicTunnel() {
-  const process = tunnelProcess;
+export function stopPublicTunnel(): void {
+  const child = tunnelProcess;
 
-  if (!process) {
+  if (!child) {
     return;
   }
 
   console.log("[Tunnel] Stopping Cloudflare Tunnel...");
 
-  process.kill("SIGTERM");
+  child.kill("SIGTERM");
 
   tunnelProcess = null;
 }
