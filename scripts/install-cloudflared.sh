@@ -26,8 +26,8 @@ echo "[cloudflared] Installing for Linux architecture: $ARCH"
 echo "[cloudflared] Downloading from: $URL"
 
 node - "$URL" "$BIN" <<'NODE'
-const fs = require("node:fs");
-const { Readable } = require("node:stream");
+import fs from "node:fs";
+import { Readable } from "node:stream";
 
 const [url, output] = process.argv.slice(2);
 
