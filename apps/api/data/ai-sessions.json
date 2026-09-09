@@ -1,0 +1,72 @@
+{
+  "1788902019246-0.6531455231111667": [
+    {
+      "id": "1687bc32-87eb-4aba-83e8-4f92d8ed0455",
+      "title": "هلا والله",
+      "createdAt": "2026-09-08T21:13:50.755Z",
+      "updatedAt": "2026-09-08T21:13:57.979Z",
+      "messages": [
+        {
+          "role": "user",
+          "text": "هلا والله",
+          "createdAt": "2026-09-08T21:13:56.633Z"
+        },
+        {
+          "role": "assistant",
+          "text": "هلا والله! كيف أقدر أساعدك اليوم؟ 😊",
+          "createdAt": "2026-09-08T21:13:57.979Z"
+        }
+      ]
+    }
+  ],
+  "69984f20-bccb-456a-9560-a8a7973dcfc0": [
+    {
+      "id": "296239d8-46b5-4af9-8dcb-eea715368154",
+      "title": "هلا والله",
+      "createdAt": "2026-09-09T06:23:41.915Z",
+      "updatedAt": "2026-09-09T06:39:31.184Z",
+      "messages": [
+        {
+          "role": "user",
+          "text": "هلا والله",
+          "createdAt": "2026-09-09T06:27:13.820Z"
+        },
+        {
+          "role": "assistant",
+          "text": "هلا والله! كيف أقدر أساعدك اليوم؟ 🚀",
+          "createdAt": "2026-09-09T06:27:15.077Z"
+        },
+        {
+          "role": "user",
+          "text": "غ",
+          "createdAt": "2026-09-09T06:39:29.444Z"
+        },
+        {
+          "role": "assistant",
+          "text": "أهلاً! يبدو أن الرسالة اختصرت. هل في شيء معين تحب تسأل عنه أو تحتاج مساعدة فيه؟ أنا جاهز لأي سؤال برمجي أو تخطيطي للمشاريع!",
+          "createdAt": "2026-09-09T06:39:31.184Z"
+        }
+      ]
+    }
+  ],
+  "c7ae2485-ae31-40d9-91ef-768e686f076c": [
+    {
+      "id": "f6d51d59-623a-4b50-bea6-74fc3bcf51e9",
+      "title": "HI",
+      "createdAt": "2026-09-09T08:28:06.704Z",
+      "updatedAt": "2026-09-09T08:28:07.505Z",
+      "messages": [
+        {
+          "role": "user",
+          "text": "HI",
+          "createdAt": "2026-09-09T08:28:06.744Z"
+        },
+        {
+          "role": "assistant",
+          "text": "Hello! 👋 I’m NΞXUS XS AI – here to help you with project planning, code questions, or any programming challenges you’re facing. How can I assist you today?",
+          "createdAt": "2026-09-09T08:28:07.505Z"
+        }
+      ]
+    }
+  ]
+}

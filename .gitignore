@@ -1,0 +1,11 @@
+node_modules/
+.env
+.env.*
+!.env.example
+dist/
+build/
+.cache/
+
+# Local/editor backup files
+*.backup
+*.before-*

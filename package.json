@@ -1,0 +1,25 @@
+{
+  "name": "nexus-xs",
+  "private": true,
+  "version": "0.1.0",
+  "description": "NΞXUS XS - Private Developer Network",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:web": "concurrently -k -n WEB,API -c auto \"npm --workspace apps/web run dev -- --host 0.0.0.0 --port 5173\" \"npm --workspace apps/api run dev\"",
+    "dev:api": "npm --workspace apps/api run dev",
+    "build": "npm run build --workspaces"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "express-session": "^1.19.0"
+  },
+  "devDependencies": {
+    "@types/express-session": "^1.19.0",
+    "concurrently": "^10.0.5"
+  }
+}
