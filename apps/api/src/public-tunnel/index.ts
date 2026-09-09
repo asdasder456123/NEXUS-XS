@@ -2,7 +2,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const WEB_URL = "http://127.0.0.1:5173";
+const WEB_URL = "http://127.0.0.1:3000";
 
 const PUBLIC_URL_CHANNELS = [
   "1547158553490493500",

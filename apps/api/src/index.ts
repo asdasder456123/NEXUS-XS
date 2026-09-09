@@ -1,12 +1,20 @@
 import { createServer } from "node:http";
-import dotenv from "dotenv";
+import { fileURLToPath } from "node:url";
 import path from "node:path";
+import dotenv from "dotenv";
 
-// Load the project-root .env explicitly when running from apps/api.
-dotenv.config({ path: path.resolve(process.cwd(), "../../.env") });
+const currentFile = fileURLToPath(import.meta.url);
+const currentDirectory = path.dirname(currentFile);
+const projectRoot = path.resolve(currentDirectory, "../../..");
+
+dotenv.config({
+  path: path.join(projectRoot, ".env"),
+});
+
 import cors from "cors";
 import express from "express";
 import session from "express-session";
+
 import { authRouter } from "./auth/routes.js";
 import { aiRouter } from "./ai/routes.js";
 import { minecraftBotRouter } from "./minecraft-bot/routes.js";
@@ -14,7 +22,10 @@ import { startDiscordNewsBot } from "./discord-bot/index.js";
 import { newsRouter } from "./news/routes.js";
 import { chatRouter } from "./chat/routes.js";
 import { attachChatWebSocket } from "./chat/ws.js";
-import { startPublicTunnel, stopPublicTunnel } from "./public-tunnel/index.js";
+import {
+  startPublicTunnel,
+  stopPublicTunnel,
+} from "./public-tunnel/index.js";
 
 const app = express();
 const port = Number(process.env.PORT ?? 3000);
@@ -46,12 +57,14 @@ app.use(
   }),
 );
 
+/*
+ * API routes
+ */
 app.use("/auth", authRouter);
 app.use("/api/ai", aiRouter);
 app.use("/api/minecraft-bot", minecraftBotRouter);
 app.use("/api/news", newsRouter);
 app.use("/api/chat", chatRouter);
-
 
 app.get("/api/health", (_req, res) => {
   res.json({
@@ -61,22 +74,68 @@ app.get("/api/health", (_req, res) => {
   });
 });
 
-startDiscordNewsBot();
+/*
+ * Production web frontend.
+ *
+ * Works both from:
+ *   apps/api/src/index.ts
+ * and:
+ *   apps/api/dist/index.js
+ */
+const webDistPath = path.resolve(
+  currentDirectory,
+  "../../web/dist",
+);
 
-void startPublicTunnel();
+app.use(express.static(webDistPath));
 
-process.on("SIGINT", () => {
-  stopPublicTunnel();
-});
+/*
+ * SPA fallback.
+ *
+ * API/auth routes are left untouched.
+ */
+app.use((req, res, next) => {
+  if (
+    req.method === "GET" &&
+    !req.path.startsWith("/api/") &&
+    !req.path.startsWith("/auth")
+  ) {
+    res.sendFile(path.join(webDistPath, "index.html"), (error) => {
+      if (error) {
+        next(error);
+      }
+    });
 
-process.on("SIGTERM", () => {
-  stopPublicTunnel();
+    return;
+  }
+
+  next();
 });
 
 const server = createServer(app);
 
 attachChatWebSocket(server);
 
-server.listen(port, () => {
-  console.log(`NΞXUS XS API running on http://127.0.0.1:${port}`);
+server.listen(port, "127.0.0.1", () => {
+  console.log(
+    `NΞXUS XS production server running on http://127.0.0.1:${port}`,
+  );
 });
+
+startDiscordNewsBot();
+
+void startPublicTunnel();
+
+function shutdown(signal: string) {
+  console.log(`[NΞXUS XS] Received ${signal}. Shutting down...`);
+
+  stopPublicTunnel();
+
+  server.close(() => {
+    console.log("[NΞXUS XS] Server stopped.");
+    process.exit(0);
+  });
+}
+
+process.on("SIGINT", () => shutdown("SIGINT"));
+process.on("SIGTERM", () => shutdown("SIGTERM"));
