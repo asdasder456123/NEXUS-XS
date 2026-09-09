@@ -14,23 +14,6 @@ function getDiscordToken(): string | undefined {
   return process.env.DISCORD_BOT_TOKEN;
 }
 
-async function waitForWeb() {
-  for (;;) {
-    try {
-      const response = await fetch(WEB_URL);
-
-      if (response.ok || response.status < 500) {
-        console.log("[Tunnel] Web server is ready.");
-        return;
-      }
-    } catch {
-      // Web server is not ready yet.
-    }
-
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-  }
-}
-
 async function announcePublicUrl(url: string) {
   if (url === lastAnnouncedUrl) {
     return;
@@ -112,8 +95,6 @@ export async function startPublicTunnel() {
     console.log("[Tunnel] Already running.");
     return;
   }
-
-  await waitForWeb();
 
   console.log("[Tunnel] Starting Cloudflare Quick Tunnel...");
 
