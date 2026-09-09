@@ -11,7 +11,8 @@
     "dev:web": "concurrently -k -n WEB,API -c auto \"npm --workspace apps/web run dev -- --host 0.0.0.0 --port 5173\" \"npm --workspace apps/api run dev\"",
     "dev:api": "npm --workspace apps/api run dev",
     "build": "npm run build --workspaces",
-    "start": "node scripts/start.mjs"
+    "start": "node scripts/start.mjs",
+    "build:deploy": "sh scripts/install-cloudflared.sh && npm run build --workspaces"
   },
   "engines": {
     "node": ">=20"

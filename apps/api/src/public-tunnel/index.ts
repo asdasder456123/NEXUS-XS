@@ -98,8 +98,16 @@ export async function startPublicTunnel() {
 
   console.log("[Tunnel] Starting Cloudflare Quick Tunnel...");
 
-  const process = spawn(
+  const cloudflaredPath = path.resolve(
+    process.cwd(),
+    ".cloudflared-bin",
     "cloudflared",
+  );
+
+  console.log(`[Tunnel] Using cloudflared: ${cloudflaredPath}`);
+
+  const process = spawn(
+    cloudflaredPath,
     [
       "tunnel",
       "--url",
