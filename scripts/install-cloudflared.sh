@@ -23,15 +23,46 @@ case "$ARCH" in
 esac
 
 echo "[cloudflared] Installing for Linux architecture: $ARCH"
+echo "[cloudflared] Downloading from: $URL"
 
-if command -v curl >/dev/null 2>&1; then
-  curl -fL "$URL" -o "$BIN"
-elif command -v wget >/dev/null 2>&1; then
-  wget -O "$BIN" "$URL"
-else
-  echo "[cloudflared] Neither curl nor wget is available."
-  exit 1
-fi
+node - "$URL" "$BIN" <<'NODE'
+const fs = require("node:fs");
+const { Readable } = require("node:stream");
+
+const [url, output] = process.argv.slice(2);
+
+const response = await fetch(url);
+
+if (!response.ok || !response.body) {
+  throw new Error(`Download failed: ${response.status} ${response.statusText}`);
+}
+
+const file = fs.createWriteStream(output);
+
+await Readable.fromWeb(response.body).pipeTo(
+  new WritableStream({
+    write(chunk) {
+      return new Promise((resolve, reject) => {
+        if (file.write(chunk)) {
+          resolve();
+        } else {
+          file.once("drain", resolve);
+          file.once("error", reject);
+        }
+      });
+    },
+    close() {
+      return new Promise((resolve, reject) => {
+        file.end(() => resolve());
+        file.once("error", reject);
+      });
+    },
+    abort(error) {
+      file.destroy(error);
+    },
+  }),
+);
+NODE
 
 chmod +x "$BIN"
 
