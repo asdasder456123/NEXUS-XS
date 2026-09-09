@@ -15,8 +15,11 @@ type BotRecord = {
   host: string;
   port: number;
   username: string;
-  bot: Bot;
+  bot: Bot | null;
   status: BotStatus;
+  autoReconnect: boolean;
+  reconnectTimer?: ReturnType<typeof setTimeout>;
+  connectionId: number;
 };
 
 type ChatMessage = {
@@ -32,6 +35,9 @@ const messages: ChatMessage[] = [];
 
 let activeBotKey: string | null = null;
 let messageId = 1;
+
+const RECONNECT_DELAY = 5_000;
+const CONNECT_TIMEOUT = 30_000;
 
 function addMessage(
   role: ChatMessage["role"],
@@ -79,7 +85,214 @@ function sendMinecraftCommand(record: BotRecord, command: string) {
     throw new Error("Minecraft command must start with /");
   }
 
+  if (!record.bot || record.status !== "online") {
+    throw new Error("Minecraft bot is not online");
+  }
+
   record.bot.chat(normalized);
+}
+
+function clearReconnectTimer(record: BotRecord) {
+  if (record.reconnectTimer) {
+    clearTimeout(record.reconnectTimer);
+    record.reconnectTimer = undefined;
+  }
+}
+
+function scheduleReconnect(record: BotRecord) {
+  if (!record.autoReconnect) {
+    return;
+  }
+
+  clearReconnectTimer(record);
+
+  record.status = "offline";
+
+  console.log(
+    `[Minecraft:${record.username}] Reconnecting in ${RECONNECT_DELAY / 1000}s...`,
+  );
+
+  addMessage(
+    "assistant",
+    "MC",
+    `🔄 سيتم إعادة اتصال البوت ${botInfo(record)} خلال 5 ثوانٍ...`,
+  );
+
+  record.reconnectTimer = setTimeout(() => {
+    record.reconnectTimer = undefined;
+
+    if (!record.autoReconnect) {
+      return;
+    }
+
+    connectBot(record);
+  }, RECONNECT_DELAY);
+}
+
+function connectBot(record: BotRecord) {
+  if (!record.autoReconnect) {
+    return;
+  }
+
+  clearReconnectTimer(record);
+
+  const connectionId = ++record.connectionId;
+
+  record.status = "connecting";
+  record.bot = null;
+
+  console.log(
+    `[Minecraft:${record.username}] Connecting to ${record.host}:${record.port}...`,
+  );
+
+  let bot: Bot;
+
+  try {
+    bot = mineflayer.createBot({
+      host: record.host,
+      port: record.port,
+      username: record.username,
+    });
+  } catch (error) {
+    console.error(
+      `[Minecraft:${record.username}] Failed to create bot:`,
+      error,
+    );
+
+    record.status = "error";
+
+    addMessage(
+      "assistant",
+      "MC",
+      `❌ فشل إنشاء البوت ${botInfo(record)}. سيتم إعادة المحاولة تلقائيًا.`,
+    );
+
+    scheduleReconnect(record);
+    return;
+  }
+
+  record.bot = bot;
+
+  let finished = false;
+
+  const timeout = setTimeout(() => {
+    if (finished || connectionId !== record.connectionId) {
+      return;
+    }
+
+    finished = true;
+
+    record.status = "error";
+
+    addMessage(
+      "assistant",
+      "MC",
+      `⏱️ انتهت مهلة الاتصال: ${botInfo(record)} — إعادة المحاولة تلقائيًا.`,
+    );
+
+    try {
+      bot.quit("Connection timeout");
+    } catch {}
+
+    scheduleReconnect(record);
+  }, CONNECT_TIMEOUT);
+
+  bot.once("spawn", () => {
+    if (connectionId !== record.connectionId) {
+      return;
+    }
+
+    clearTimeout(timeout);
+
+    finished = true;
+    record.status = "online";
+    record.bot = bot;
+
+    activeBotKey = record.key;
+
+    addMessage(
+      "assistant",
+      "MC",
+      `🟢 البوت دخل السيرفر بنجاح: ${botInfo(record)}`,
+    );
+
+    console.log(
+      `[Minecraft:${record.username}] Online.`,
+    );
+  });
+
+  bot.on("messagestr", (message) => {
+    const text = String(message).trim();
+
+    if (!text) {
+      return;
+    }
+
+    console.log(
+      `[Minecraft:${record.username}] ${text}`,
+    );
+  });
+
+  bot.on("error", (error) => {
+    if (connectionId !== record.connectionId) {
+      return;
+    }
+
+    console.error(
+      `[Minecraft:${record.username}]`,
+      error,
+    );
+
+    record.status = "error";
+
+    addMessage(
+      "assistant",
+      "MC",
+      `❌ خطأ في البوت ${botInfo(record)}: ${error.message}`,
+    );
+  });
+
+  bot.on("end", () => {
+    if (connectionId !== record.connectionId) {
+      return;
+    }
+
+    clearTimeout(timeout);
+
+    if (record.bot === bot) {
+      record.bot = null;
+    }
+
+    if (activeBotKey === record.key) {
+      activeBotKey = null;
+    }
+
+    console.log(
+      `[Minecraft:${record.username}] Connection ended.`,
+    );
+
+    if (!record.autoReconnect) {
+      record.status = "stopped";
+
+      addMessage(
+        "assistant",
+        "MC",
+        `🛑 تم إيقاف البوت: ${botInfo(record)}`,
+      );
+
+      return;
+    }
+
+    record.status = "offline";
+
+    addMessage(
+      "assistant",
+      "MC",
+      `🔴 البوت خرج من السيرفر: ${botInfo(record)} — سيتم إعادة تشغيله تلقائيًا.`,
+    );
+
+    scheduleReconnect(record);
+  });
 }
 
 router.get("/chat", (_req, res) => {
@@ -125,7 +338,12 @@ router.post("/chat", (req, res) => {
     const port = Number(args[1]);
     const username = args[2];
 
-    if (!host || !Number.isInteger(port) || port < 1 || port > 65535) {
+    if (
+      !host ||
+      !Number.isInteger(port) ||
+      port < 1 ||
+      port > 65535
+    ) {
       addMessage(
         "assistant",
         "MC",
@@ -135,47 +353,39 @@ router.post("/chat", (req, res) => {
       return res.json({ ok: true });
     }
 
-    const key = botKey(host, port, username);
+    const key = botKey(
+      host,
+      port,
+      username,
+    );
 
     const existing = bots.get(key);
 
-    if (
-      existing &&
-      existing.status !== "offline" &&
-      existing.status !== "stopped" &&
-      existing.status !== "error"
-    ) {
-      addMessage(
-        "assistant",
-        "MC",
-        `⚠️ البوت يعمل بالفعل: ${botInfo(existing)} — الحالة: ${existing.status}`,
-      );
+    if (existing) {
+      existing.autoReconnect = true;
 
-      return res.json({ ok: true });
-    }
+      if (
+        existing.status === "online" ||
+        existing.status === "connecting"
+      ) {
+        addMessage(
+          "assistant",
+          "MC",
+          `⚠️ البوت يعمل بالفعل: ${botInfo(existing)} — الحالة: ${existing.status}`,
+        );
 
-    addMessage(
-      "assistant",
-      "MC",
-      `🟡 جاري تشغيل البوت ${username} على ${host}:${port}...`,
-    );
+        return res.json({ ok: true });
+      }
 
-    let bot: Bot;
-
-    try {
-      bot = mineflayer.createBot({
-        host,
-        port,
-        username,
-      });
-    } catch (error) {
-      console.error("Failed to create Minecraft bot:", error);
+      clearReconnectTimer(existing);
 
       addMessage(
         "assistant",
         "MC",
-        `❌ فشل إنشاء البوت ${username}.`,
+        `🔄 إعادة تشغيل البوت: ${botInfo(existing)}...`,
       );
+
+      connectBot(existing);
 
       return res.json({ ok: true });
     }
@@ -185,92 +395,21 @@ router.post("/chat", (req, res) => {
       host,
       port,
       username,
-      bot,
+      bot: null,
       status: "connecting",
+      autoReconnect: true,
+      connectionId: 0,
     };
 
     bots.set(key, record);
 
-    let finished = false;
+    addMessage(
+      "assistant",
+      "MC",
+      `🟡 جاري تشغيل البوت ${username} على ${host}:${port} — إعادة الاتصال التلقائي مفعلة.`,
+    );
 
-    const timeout = setTimeout(() => {
-      if (finished) return;
-
-      finished = true;
-      record.status = "error";
-
-      addMessage(
-        "assistant",
-        "MC",
-        `❌ انتهت مهلة الاتصال: ${botInfo(record)}`,
-      );
-
-      try {
-        bot.quit("Connection timeout");
-      } catch {}
-    }, 30_000);
-
-    bot.once("spawn", () => {
-      if (finished) return;
-
-      clearTimeout(timeout);
-
-      record.status = "online";
-      activeBotKey = record.key;
-
-      addMessage(
-        "assistant",
-        "MC",
-        `🟢 البوت دخل السيرفر بنجاح: ${botInfo(record)}`,
-      );
-    });
-
-    bot.on("messagestr", (message) => {
-      const text = String(message).trim();
-
-      if (!text) return;
-
-      console.log(`[Minecraft:${username}] ${text}`);
-    });
-
-    bot.on("error", (error) => {
-      console.error(
-        `[Minecraft:${username}]`,
-        error,
-      );
-
-      if (!finished) {
-        record.status = "error";
-
-        addMessage(
-          "assistant",
-          "MC",
-          `❌ خطأ في البوت ${botInfo(record)}: ${error.message}`,
-        );
-      }
-    });
-
-    bot.on("end", () => {
-      clearTimeout(timeout);
-
-      if (!finished) {
-        finished = true;
-
-        if (record.status !== "stopped") {
-          record.status = "offline";
-        }
-
-        if (activeBotKey === record.key) {
-          activeBotKey = null;
-        }
-
-        addMessage(
-          "assistant",
-          "MC",
-          `🔴 البوت خرج من السيرفر: ${botInfo(record)}`,
-        );
-      }
-    });
+    connectBot(record);
 
     return res.json({ ok: true });
   }
@@ -290,7 +429,11 @@ router.post("/chat", (req, res) => {
     const port = Number(args[1]);
     const username = args[2];
 
-    const record = findBot(host, port, username);
+    const record = findBot(
+      host,
+      port,
+      username,
+    );
 
     if (!record) {
       addMessage(
@@ -302,20 +445,28 @@ router.post("/chat", (req, res) => {
       return res.json({ ok: true });
     }
 
+    record.autoReconnect = false;
     record.status = "stopped";
+
+    clearReconnectTimer(record);
 
     if (activeBotKey === record.key) {
       activeBotKey = null;
     }
 
-    try {
-      record.bot.quit("Stopped by NΞXUS XS");
-    } catch {}
+    const bot = record.bot;
+    record.bot = null;
+
+    if (bot) {
+      try {
+        bot.quit("Stopped by NΞXUS XS");
+      } catch {}
+    }
 
     addMessage(
       "assistant",
       "MC",
-      `🛑 تم إيقاف البوت: ${botInfo(record)}`,
+      `🛑 تم إيقاف البوت وإلغاء إعادة الاتصال التلقائي: ${botInfo(record)}`,
     );
 
     return res.json({ ok: true });
@@ -336,7 +487,11 @@ router.post("/chat", (req, res) => {
     const port = Number(args[1]);
     const username = args[2];
 
-    const record = findBot(host, port, username);
+    const record = findBot(
+      host,
+      port,
+      username,
+    );
 
     if (!record) {
       addMessage(
@@ -351,7 +506,9 @@ router.post("/chat", (req, res) => {
     addMessage(
       "assistant",
       "MC",
-      `ℹ️ ${botInfo(record)} — الحالة: ${record.status}`,
+      `ℹ️ ${botInfo(record)} — الحالة: ${record.status} — Auto-Reconnect: ${
+        record.autoReconnect ? "ON" : "OFF"
+      }`,
     );
 
     return res.json({ ok: true });
@@ -362,7 +519,11 @@ router.post("/chat", (req, res) => {
       ? bots.get(activeBotKey)
       : undefined;
 
-    if (!record || record.status !== "online") {
+    if (
+      !record ||
+      record.status !== "online" ||
+      !record.bot
+    ) {
       addMessage(
         "assistant",
         "MC",
@@ -410,9 +571,14 @@ router.post("/chat", (req, res) => {
     const port = Number(args[1]);
     const username = args[2];
 
-    const minecraftCommand = args.slice(3).join(" ");
+    const minecraftCommand =
+      args.slice(3).join(" ");
 
-    const record = findBot(host, port, username);
+    const record = findBot(
+      host,
+      port,
+      username,
+    );
 
     if (!record) {
       addMessage(
@@ -424,7 +590,10 @@ router.post("/chat", (req, res) => {
       return res.json({ ok: true });
     }
 
-    if (record.status !== "online") {
+    if (
+      record.status !== "online" ||
+      !record.bot
+    ) {
       addMessage(
         "assistant",
         "MC",
