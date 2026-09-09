@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const WEB_URL = "http://127.0.0.1:5173";
 
@@ -10,6 +11,21 @@ const PUBLIC_URL_CHANNELS = [
 
 let tunnelProcess: ChildProcess | null = null;
 let lastAnnouncedUrl = "";
+
+function getProjectRoot(): string {
+  const currentFile = fileURLToPath(import.meta.url);
+  const currentDirectory = path.dirname(currentFile);
+
+  return path.resolve(currentDirectory, "../../../..");
+}
+
+function getCloudflaredPath(): string {
+  return path.join(
+    getProjectRoot(),
+    ".cloudflared-bin",
+    "cloudflared",
+  );
+}
 
 function getDiscordToken(): string | undefined {
   return process.env.DISCORD_BOT_TOKEN;
@@ -99,11 +115,7 @@ export async function startPublicTunnel(): Promise<void> {
 
   console.log("[Tunnel] Starting Cloudflare Quick Tunnel...");
 
-  const cloudflaredPath = path.resolve(
-    process.cwd(),
-    ".cloudflared-bin",
-    "cloudflared",
-  );
+  const cloudflaredPath = getCloudflaredPath();
 
   console.log(`[Tunnel] Using cloudflared: ${cloudflaredPath}`);
 
