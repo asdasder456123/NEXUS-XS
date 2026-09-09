@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import crypto from "node:crypto";
+import { fileURLToPath } from "node:url";
 
 export type NewsItem = {
   id: string;
@@ -13,7 +14,14 @@ export type NewsItem = {
   createdAt: string;
 };
 
-const filePath = path.resolve(process.cwd(), "data/news/news.json");
+const currentFile = fileURLToPath(import.meta.url);
+const currentDirectory = path.dirname(currentFile);
+const projectRoot = path.resolve(currentDirectory, "../../../..");
+
+const filePath = path.join(
+  projectRoot,
+  "data/news/news.json",
+);
 
 async function ensureStorage() {
   await fs.mkdir(path.dirname(filePath), { recursive: true });

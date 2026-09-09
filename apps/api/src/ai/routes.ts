@@ -209,7 +209,22 @@ aiRouter.post("/chat", async (req, res) => {
       session: updatedSession,
     });
   } catch (error) {
-    console.error("NΞXUS XS AI error:", error);
+    const status =
+      typeof error === "object" &&
+      error !== null &&
+      "status" in error
+        ? (error as { status?: unknown }).status
+        : undefined;
+
+    const message =
+      error instanceof Error
+        ? error.message
+        : String(error);
+
+    console.error("[AI] Groq request failed:", {
+      status,
+      message,
+    });
 
     return res.status(500).json({
       ok: false,

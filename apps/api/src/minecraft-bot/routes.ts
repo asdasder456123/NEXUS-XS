@@ -30,6 +30,7 @@ type ChatMessage = {
 const bots = new Map<string, BotRecord>();
 const messages: ChatMessage[] = [];
 
+let activeBotKey: string | null = null;
 let messageId = 1;
 
 function addMessage(
@@ -215,6 +216,7 @@ router.post("/chat", (req, res) => {
       clearTimeout(timeout);
 
       record.status = "online";
+      activeBotKey = record.key;
 
       addMessage(
         "assistant",
@@ -258,6 +260,10 @@ router.post("/chat", (req, res) => {
           record.status = "offline";
         }
 
+        if (activeBotKey === record.key) {
+          activeBotKey = null;
+        }
+
         addMessage(
           "assistant",
           "MC",
@@ -297,6 +303,10 @@ router.post("/chat", (req, res) => {
     }
 
     record.status = "stopped";
+
+    if (activeBotKey === record.key) {
+      activeBotKey = null;
+    }
 
     try {
       record.bot.quit("Stopped by NΞXUS XS");
@@ -343,6 +353,44 @@ router.post("/chat", (req, res) => {
       "MC",
       `ℹ️ ${botInfo(record)} — الحالة: ${record.status}`,
     );
+
+    return res.json({ ok: true });
+  }
+
+  if (!command.startsWith("!")) {
+    const record = activeBotKey
+      ? bots.get(activeBotKey)
+      : undefined;
+
+    if (!record || record.status !== "online") {
+      addMessage(
+        "assistant",
+        "MC",
+        "⚠️ لا يوجد Minecraft Bot متصل حاليًا. شغّل البوت أولًا باستخدام !start IP PORT BOT_NAME",
+      );
+
+      return res.json({ ok: true });
+    }
+
+    try {
+      record.bot.chat(text);
+
+      addMessage(
+        "assistant",
+        "MC",
+        `📤 تم إرسال الرسالة إلى ${record.username}: ${text}`,
+      );
+    } catch (error) {
+      addMessage(
+        "assistant",
+        "MC",
+        `❌ فشل إرسال الرسالة: ${
+          error instanceof Error
+            ? error.message
+            : "Unknown error"
+        }`,
+      );
+    }
 
     return res.json({ ok: true });
   }

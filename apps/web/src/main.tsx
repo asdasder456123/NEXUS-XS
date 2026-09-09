@@ -14,7 +14,14 @@ type ChatMessage = {
 };
 
 const API_URL =
-  import.meta.env.VITE_API_URL ?? "http://127.0.0.1:3000";
+  import.meta.env.VITE_API_URL ??
+  (import.meta.env.DEV ? "http://127.0.0.1:3000" : "");
+
+const WS_URL =
+  import.meta.env.VITE_WS_URL ??
+  (import.meta.env.DEV
+    ? "ws://127.0.0.1:3000/ws/chat"
+    : `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/ws/chat`);
 
 const sections: Section[] = [
   {
@@ -315,8 +322,15 @@ function NewsPage() {
   const [items, setItems] = useState<NewsItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [loadingRef] = useState({
+    current: false,
+  });
 
   async function loadNews() {
+    if (loadingRef.current) return;
+
+    loadingRef.current = true;
+
     try {
       setLoading(true);
 
@@ -335,6 +349,7 @@ function NewsPage() {
       setError("تعذر تحميل الأخبار.");
     } finally {
       setLoading(false);
+      loadingRef.current = false;
     }
   }
 
@@ -586,10 +601,7 @@ function ChatPage() {
   }, []);
 
   useEffect(() => {
-    const wsUrl =
-      API_URL.replace(/^http/, "ws") + "/ws/chat";
-
-    const socket = new WebSocket(wsUrl);
+    const socket = new WebSocket(WS_URL);
 
     socket.onopen = () => {
       setConnected(true);
@@ -662,10 +674,7 @@ function ChatPage() {
     setSending(true);
     setError("");
 
-    const wsUrl =
-      API_URL.replace(/^http/, "ws") + "/ws/chat";
-
-    const socket = new WebSocket(wsUrl);
+    const socket = new WebSocket(WS_URL);
 
     socket.onopen = () => {
       socket.send(
