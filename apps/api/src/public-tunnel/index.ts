@@ -1,4 +1,4 @@
-import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { spawn, type ChildProcess } from "node:child_process";
 
 const WEB_URL = "http://127.0.0.1:5173";
 
@@ -7,7 +7,7 @@ const PUBLIC_URL_CHANNELS = [
   "1545258351431127142",
 ];
 
-let tunnelProcess: ChildProcessWithoutNullStreams | null = null;
+let tunnelProcess: ChildProcess | null = null;
 let lastAnnouncedUrl = "";
 
 function getDiscordToken(): string | undefined {
@@ -117,7 +117,7 @@ export async function startPublicTunnel() {
 
   console.log("[Tunnel] Starting Cloudflare Quick Tunnel...");
 
-  tunnelProcess = spawn(
+  const process = spawn(
     "cloudflared",
     [
       "tunnel",
@@ -129,30 +129,40 @@ export async function startPublicTunnel() {
     },
   );
 
-  tunnelProcess.stdout.on("data", handleOutput);
-  tunnelProcess.stderr.on("data", handleOutput);
+  tunnelProcess = process;
 
-  tunnelProcess.on("error", (error) => {
+  process.stdout?.on("data", handleOutput);
+  process.stderr?.on("data", handleOutput);
+
+  process.on("error", (error) => {
     console.error("[Tunnel] Failed to start cloudflared:", error);
-    tunnelProcess = null;
+
+    if (tunnelProcess === process) {
+      tunnelProcess = null;
+    }
   });
 
-  tunnelProcess.on("exit", (code, signal) => {
+  process.on("exit", (code, signal) => {
     console.log(
       `[Tunnel] cloudflared exited (code=${code}, signal=${signal ?? "none"})`,
     );
 
-    tunnelProcess = null;
+    if (tunnelProcess === process) {
+      tunnelProcess = null;
+    }
   });
 }
 
 export function stopPublicTunnel() {
-  if (!tunnelProcess) {
+  const process = tunnelProcess;
+
+  if (!process) {
     return;
   }
 
   console.log("[Tunnel] Stopping Cloudflare Tunnel...");
 
-  tunnelProcess.kill("SIGTERM");
+  process.kill("SIGTERM");
+
   tunnelProcess = null;
 }

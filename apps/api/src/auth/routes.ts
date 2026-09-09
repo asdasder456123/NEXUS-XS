@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import { Router } from "express";
 import {
   exchangeDiscordCode,
@@ -7,13 +8,25 @@ import {
 
 export const authRouter = Router();
 
-authRouter.get("/discord", (_req, res) => {
-  res.redirect(getDiscordLoginUrl());
+authRouter.get("/discord", (req, res) => {
+  const state = crypto.randomBytes(32).toString("hex");
+  req.session.oauthState = state;
+
+  res.redirect(getDiscordLoginUrl(state));
 });
 
 authRouter.get("/discord/callback", async (req, res) => {
   try {
     const code = String(req.query.code ?? "");
+    const state = String(req.query.state ?? "");
+
+    if (!state || state !== req.session.oauthState) {
+      return res.status(400).json({
+        error: "Invalid OAuth state",
+      });
+    }
+
+    delete req.session.oauthState;
 
     if (!code) {
       return res.status(400).json({
