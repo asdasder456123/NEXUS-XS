@@ -18,6 +18,7 @@ import { aiRouter } from "./ai/routes.js";
 import { minecraftBotRouter } from "./minecraft-bot/routes.js";
 import { startDiscordNewsBot } from "./discord-bot/index.js";
 import { newsRouter } from "./news/routes.js";
+import { resourcePacksRouter } from "./resource-packs/routes.js";
 import { chatRouter } from "./chat/routes.js";
 import { attachChatWebSocket } from "./chat/ws.js";
 import {
@@ -41,6 +42,7 @@ app.use(express.json());
 app.use("/api/ai", aiRouter);
 app.use("/api/minecraft-bot", minecraftBotRouter);
 app.use("/api/news", newsRouter);
+app.use("/api/resource-packs", resourcePacksRouter);
 app.use("/api/chat", chatRouter);
 
 app.get("/api/health", (_req, res) => {
