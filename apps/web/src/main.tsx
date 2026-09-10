@@ -254,7 +254,6 @@ function App() {
                     className="account-action"
                     onClick={() => {
                       setAuthError("");
-                      setAuthMode("login");
                     }}
                   >
                     <span>⚙️</span>
@@ -277,10 +276,7 @@ function App() {
                           setLoginOpen(false);
                         })
                         .catch((error) => {
-                          console.error(
-                            "[Auth] Logout failed:",
-                            error,
-                          );
+                          console.error("[Auth] Logout failed:", error);
                         });
                     }}
                   >
@@ -319,11 +315,7 @@ function App() {
                 <div className="auth-switch">
                   <button
                     type="button"
-                    className={
-                      authMode === "login"
-                        ? "active"
-                        : ""
-                    }
+                    className={authMode === "login" ? "active" : ""}
                     onClick={() => {
                       setAuthMode("login");
                       setAuthError("");
@@ -334,11 +326,7 @@ function App() {
 
                   <button
                     type="button"
-                    className={
-                      authMode === "register"
-                        ? "active"
-                        : ""
-                    }
+                    className={authMode === "register" ? "active" : ""}
                     onClick={() => {
                       setAuthMode("register");
                       setAuthError("");
@@ -386,9 +374,7 @@ function App() {
                         type="password"
                         value={authConfirmPassword}
                         onChange={(event) =>
-                          setAuthConfirmPassword(
-                            event.target.value,
-                          )
+                          setAuthConfirmPassword(event.target.value)
                         }
                         placeholder="Confirm password"
                         autoComplete="new-password"
@@ -420,7 +406,6 @@ function App() {
           </div>
         </div>
       )}
-
     </div>
   );
 }
