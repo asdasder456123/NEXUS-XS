@@ -1,7 +1,8 @@
-import Database from "better-sqlite3";
+import { DatabaseSync } from "node:sqlite";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import crypto from "node:crypto";
 
 const currentFile = fileURLToPath(import.meta.url);
 const currentDirectory = path.dirname(currentFile);
@@ -11,11 +12,9 @@ const dataDirectory = path.join(projectRoot, "data", "database");
 
 fs.mkdirSync(dataDirectory, { recursive: true });
 
-const database = new Database(
+const database = new DatabaseSync(
   path.join(dataDirectory, "nexus-xs.db"),
 );
-
-database.pragma("journal_mode = WAL");
 
 database.exec(`
   CREATE TABLE IF NOT EXISTS users (
@@ -81,7 +80,7 @@ export function createUser(
   passwordHash: string,
   passwordSalt: string,
 ): User {
-  const id = cryptoRandomId();
+  const id = crypto.randomUUID();
   const createdAt = new Date().toISOString();
 
   insertUser.run(
@@ -111,12 +110,4 @@ export function getUserById(
   id: string,
 ): User | undefined {
   return findUserById.get(id) as User | undefined;
-}
-
-function cryptoRandomId() {
-  return `${Date.now()}-${Math.random()
-    .toString(36)
-    .slice(2)}-${Math.random()
-    .toString(36)
-    .slice(2)}`;
 }
