@@ -14,11 +14,13 @@
     "express": "^5.1.0",
     "groq-sdk": "^1.6.0",
     "mineflayer": "^4.39.0",
+    "multer": "^2.3.0",
     "ws": "^8.21.3"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.3",
+    "@types/multer": "^2.2.0",
     "@types/node": "^24.3.0",
     "@types/ws": "^8.18.1",
     "tsx": "^4.20.5",

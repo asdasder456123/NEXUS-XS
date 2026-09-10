@@ -50,6 +50,11 @@ const sections: Section[] = [
     description: "Minecraft bot workspace.",
   },
   {
+    icon: "▣",
+    name: "Resource Packs",
+    description: "Minecraft resource packs published by NΞXUS XS users.",
+  },
+  {
     icon: "✦",
     name: "NΞXUS XS AI",
     description: "AI workspace powered by Groq.",
@@ -940,6 +945,10 @@ function ServicePage({ section }: { section: Section }) {
     return <MinecraftBotWorkspace />;
   }
 
+  if (section.name === "Resource Packs") {
+    return <ResourcePacksPage />;
+  }
+
   if (section.name === "Rules") {
     return <RulesPage />;
   }
@@ -964,6 +973,350 @@ function ServicePage({ section }: { section: Section }) {
   );
 }
 
+
+
+type ResourcePack = {
+  id: string;
+  name: string;
+  description: string;
+  minecraftVersion: string;
+  category: string;
+  author: string;
+  image?: string;
+  downloadUrl?: string;
+  createdAt: string;
+};
+
+function ResourcePacksPage() {
+  const [packs, setPacks] = useState<ResourcePack[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [publishOpen, setPublishOpen] = useState(false);
+
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [minecraftVersion, setMinecraftVersion] = useState("1.21");
+  const [category, setCategory] = useState("Faithful");
+  const [image, setImage] = useState<File | null>(null);
+  const [packFile, setPackFile] = useState<File | null>(null);
+  const [publishing, setPublishing] = useState(false);
+
+  async function loadPacks() {
+    try {
+      setLoading(true);
+
+      const response = await fetch(`${API_URL}/api/resource-packs`);
+      const data = await response.json();
+
+      if (!response.ok || !data.ok) {
+        throw new Error(data.error ?? "Failed to load resource packs");
+      }
+
+      setPacks(Array.isArray(data.packs) ? data.packs : []);
+      setError("");
+    } catch (err) {
+      console.error("[Resource Packs] Load error:", err);
+      setError("تعذر تحميل Resource Packs حاليًا.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void loadPacks();
+  }, []);
+
+  function resetPublishForm() {
+    setName("");
+    setDescription("");
+    setMinecraftVersion("1.21");
+    setCategory("Faithful");
+    setImage(null);
+    setPackFile(null);
+  }
+
+  function closePublish() {
+    if (publishing) return;
+
+    setPublishOpen(false);
+    resetPublishForm();
+  }
+
+  async function publishPack() {
+    const trimmedName = name.trim();
+    const trimmedDescription = description.trim();
+
+    if (!trimmedName || !trimmedDescription || !packFile) {
+      setError("أكمل اسم الحزمة والوصف واختر ملف ZIP.");
+      return;
+    }
+
+    if (!packFile.name.toLowerCase().endsWith(".zip")) {
+      setError("يجب أن يكون Resource Pack بصيغة ZIP.");
+      return;
+    }
+
+    setPublishing(true);
+    setError("");
+
+    try {
+      const formData = new FormData();
+
+      formData.append("name", trimmedName);
+      formData.append("description", trimmedDescription);
+      formData.append("minecraftVersion", minecraftVersion);
+      formData.append("category", category);
+      formData.append("pack", packFile);
+
+      if (image) {
+        formData.append("image", image);
+      }
+
+      const response = await fetch(
+        `${API_URL}/api/resource-packs`,
+        {
+          method: "POST",
+          body: formData,
+        },
+      );
+
+      const data = await response.json();
+
+      if (!response.ok || !data.ok) {
+        throw new Error(
+          data.error ?? "Failed to publish resource pack",
+        );
+      }
+
+      closePublish();
+      await loadPacks();
+    } catch (err) {
+      console.error("[Resource Packs] Publish error:", err);
+      setError("تعذر نشر Resource Pack حاليًا.");
+    } finally {
+      setPublishing(false);
+    }
+  }
+
+  return (
+    <section className="service-page resource-packs-page">
+      <div className="eyebrow">MINECRAFT</div>
+
+      <div className="resource-packs-header">
+        <div>
+          <h1>Resource Packs</h1>
+          <p className="page-description">
+            Minecraft Resource Packs published by NΞXUS XS users.
+          </p>
+        </div>
+
+        <button
+          className="resource-pack-publish-button"
+          type="button"
+          onClick={() => setPublishOpen(true)}
+        >
+          <span>＋</span>
+          Publish Pack
+        </button>
+      </div>
+
+      {error ? (
+        <div className="resource-packs-error">
+          {error}
+        </div>
+      ) : null}
+
+      {loading ? (
+        <div className="resource-packs-empty">
+          <strong>Loading Resource Packs...</strong>
+        </div>
+      ) : packs.length === 0 ? (
+        <div className="resource-packs-empty">
+          <div className="resource-packs-empty-icon">▣</div>
+          <strong>No Resource Packs yet</strong>
+          <p>
+            Be the first developer to publish a Minecraft Resource Pack.
+          </p>
+
+          <button
+            className="primary-button"
+            type="button"
+            onClick={() => setPublishOpen(true)}
+          >
+            ＋ Publish your first pack
+          </button>
+        </div>
+      ) : (
+        <div className="resource-packs-grid">
+          {packs.map((pack) => (
+            <article className="resource-pack-card" key={pack.id}>
+              {pack.image ? (
+                <div className="resource-pack-card-image">
+                  <img
+                    src={pack.image}
+                    alt=""
+                    loading="lazy"
+                  />
+                </div>
+              ) : (
+                <div className="resource-pack-card-placeholder">
+                  ▣
+                </div>
+              )}
+
+              <div className="resource-pack-card-content">
+                <div className="resource-pack-card-meta">
+                  <span>{pack.minecraftVersion}</span>
+                  <span>{pack.category}</span>
+                </div>
+
+                <h2>{pack.name}</h2>
+
+                <p>{pack.description}</p>
+
+                <small>
+                  Published by {pack.author}
+                </small>
+
+                {pack.downloadUrl ? (
+                  <a
+                    className="resource-pack-download"
+                    href={pack.downloadUrl}
+                    download
+                  >
+                    Download <span>↓</span>
+                  </a>
+                ) : null}
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
+
+      {publishOpen ? (
+        <div
+          className="modal-backdrop"
+          onClick={closePublish}
+        >
+          <div
+            className="modal resource-pack-modal"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              className="modal-close"
+              type="button"
+              onClick={closePublish}
+            >
+              ×
+            </button>
+
+            <div className="eyebrow">MINECRAFT</div>
+
+            <h2>Publish Resource Pack</h2>
+
+            <p>
+              Share your Minecraft Resource Pack with NΞXUS XS users.
+            </p>
+
+            <div className="auth-form">
+              <label>
+                Pack Name
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  maxLength={100}
+                  placeholder="My Resource Pack"
+                />
+              </label>
+
+              <label>
+                Description
+                <textarea
+                  value={description}
+                  onChange={(event) =>
+                    setDescription(event.target.value)
+                  }
+                  maxLength={1000}
+                  rows={4}
+                  placeholder="Describe your Resource Pack..."
+                />
+              </label>
+
+              <label>
+                Minecraft Version
+                <select
+                  value={minecraftVersion}
+                  onChange={(event) =>
+                    setMinecraftVersion(event.target.value)
+                  }
+                >
+                  <option value="1.21">1.21</option>
+                  <option value="1.20.6">1.20.6</option>
+                  <option value="1.20.4">1.20.4</option>
+                  <option value="1.20.1">1.20.1</option>
+                  <option value="1.19.4">1.19.4</option>
+                  <option value="Other">Other</option>
+                </select>
+              </label>
+
+              <label>
+                Category
+                <select
+                  value={category}
+                  onChange={(event) =>
+                    setCategory(event.target.value)
+                  }
+                >
+                  <option value="Faithful">Faithful</option>
+                  <option value="PvP">PvP</option>
+                  <option value="Vanilla">Vanilla</option>
+                  <option value="Realistic">Realistic</option>
+                  <option value="Fantasy">Fantasy</option>
+                  <option value="GUI">GUI</option>
+                  <option value="Other">Other</option>
+                </select>
+              </label>
+
+              <label>
+                Pack Image
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  onChange={(event) =>
+                    setImage(event.target.files?.[0] ?? null)
+                  }
+                />
+              </label>
+
+              <label>
+                Resource Pack ZIP
+                <input
+                  type="file"
+                  accept=".zip,application/zip"
+                  onChange={(event) =>
+                    setPackFile(event.target.files?.[0] ?? null)
+                  }
+                />
+              </label>
+
+              <button
+                className="primary-button"
+                type="button"
+                onClick={() => void publishPack()}
+                disabled={publishing}
+              >
+                {publishing
+                  ? "Publishing..."
+                  : "Publish Resource Pack"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </section>
+  );
+}
 
 function RulesPage() {
   const rules = [
