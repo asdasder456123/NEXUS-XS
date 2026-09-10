@@ -13,9 +13,7 @@ dotenv.config({
 
 import cors from "cors";
 import express from "express";
-import session from "express-session";
 
-import { authRouter } from "./auth/routes.js";
 import { aiRouter } from "./ai/routes.js";
 import { minecraftBotRouter } from "./minecraft-bot/routes.js";
 import { startDiscordNewsBot } from "./discord-bot/index.js";
@@ -29,11 +27,6 @@ import {
 
 const app = express();
 const port = Number(process.env.PORT ?? 3000);
-
-if (!process.env.SESSION_SECRET) {
-  throw new Error("SESSION_SECRET is missing");
-}
-
 app.use(
   cors({
     origin: true,
@@ -42,25 +35,9 @@ app.use(
 );
 
 app.use(express.json());
-
-app.use(
-  session({
-    secret: process.env.SESSION_SECRET,
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: false,
-      maxAge: 1000 * 60 * 60 * 24 * 7,
-    },
-  }),
-);
-
 /*
  * API routes
  */
-app.use("/auth", authRouter);
 app.use("/api/ai", aiRouter);
 app.use("/api/minecraft-bot", minecraftBotRouter);
 app.use("/api/news", newsRouter);

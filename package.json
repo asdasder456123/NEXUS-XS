@@ -17,11 +17,7 @@
   "engines": {
     "node": ">=20"
   },
-  "dependencies": {
-    "express-session": "^1.19.0"
-  },
   "devDependencies": {
-    "@types/express-session": "^1.19.0",
     "concurrently": "^10.0.5"
   }
 }
