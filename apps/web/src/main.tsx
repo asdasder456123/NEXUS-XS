@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./style.css";
+import {
+  MINECRAFT_JAVA_VERSIONS,
+  MINECRAFT_BEDROCK_VERSIONS,
+} from "./data/minecraft-versions";
+
 
 type Section = {
   icon: string;
@@ -979,7 +984,15 @@ type ResourcePack = {
   id: string;
   name: string;
   description: string;
-  minecraftVersion: string;
+  minecraftVersions: string[];
+  platform: "java" | "bedrock" | "java-bedrock";
+  loader:
+    | "vanilla"
+    | "fabric"
+    | "forge"
+    | "neoforge"
+    | "quilt"
+    | "bedrock";
   category: string;
   author: string;
   image?: string;
@@ -995,7 +1008,16 @@ function ResourcePacksPage() {
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [minecraftVersion, setMinecraftVersion] = useState("1.21");
+  const [minecraftVersions, setMinecraftVersions] = useState<string[]>([
+    MINECRAFT_JAVA_VERSIONS[0]?.version ?? "",
+  ]);
+  const [customVersion, setCustomVersion] = useState("");
+  const [platform, setPlatform] = useState<
+    "java" | "bedrock" | "java-bedrock"
+  >("java");
+  const [loader, setLoader] = useState<
+    "vanilla" | "fabric" | "forge" | "neoforge" | "quilt" | "bedrock"
+  >("vanilla");
   const [category, setCategory] = useState("Faithful");
   const [image, setImage] = useState<File | null>(null);
   const [packFile, setPackFile] = useState<File | null>(null);
@@ -1029,7 +1051,12 @@ function ResourcePacksPage() {
   function resetPublishForm() {
     setName("");
     setDescription("");
-    setMinecraftVersion("1.21");
+    setMinecraftVersions([
+      MINECRAFT_JAVA_VERSIONS[0]?.version ?? "",
+    ]);
+    setCustomVersion("");
+    setPlatform("java");
+    setLoader("vanilla");
     setCategory("Faithful");
     setImage(null);
     setPackFile(null);
@@ -1064,7 +1091,12 @@ function ResourcePacksPage() {
 
       formData.append("name", trimmedName);
       formData.append("description", trimmedDescription);
-      formData.append("minecraftVersion", minecraftVersion);
+      for (const version of minecraftVersions) {
+        formData.append("minecraftVersions", version);
+      }
+
+      formData.append("platform", platform);
+      formData.append("loader", loader);
       formData.append("category", category);
       formData.append("pack", packFile);
 
@@ -1097,6 +1129,32 @@ function ResourcePacksPage() {
       setPublishing(false);
     }
   }
+
+  const availableMinecraftVersions = useMemo(() => {
+    if (platform === "java") {
+      return MINECRAFT_JAVA_VERSIONS;
+    }
+
+    if (platform === "bedrock") {
+      return MINECRAFT_BEDROCK_VERSIONS;
+    }
+
+    const combined = [
+      ...MINECRAFT_JAVA_VERSIONS,
+      ...MINECRAFT_BEDROCK_VERSIONS,
+    ];
+
+    const seen = new Set<string>();
+
+    return combined.filter((item) => {
+      if (seen.has(item.version)) {
+        return false;
+      }
+
+      seen.add(item.version);
+      return true;
+    });
+  }, [platform]);
 
   return (
     <section className="service-page resource-packs-page">
@@ -1166,8 +1224,25 @@ function ResourcePacksPage() {
 
               <div className="resource-pack-card-content">
                 <div className="resource-pack-card-meta">
-                  <span>{pack.minecraftVersion}</span>
+                  <span>
+                    {pack.platform === "java-bedrock"
+                      ? "Java + Bedrock"
+                      : pack.platform === "java"
+                        ? "Java"
+                        : "Bedrock"}
+                  </span>
+                  <span>
+                    {pack.loader === "java"
+                      ? "Vanilla"
+                      : pack.loader}
+                  </span>
                   <span>{pack.category}</span>
+                </div>
+
+                <div className="resource-pack-card-versions">
+                  {pack.minecraftVersions.map((version) => (
+                    <span key={version}>{version}</span>
+                  ))}
                 </div>
 
                 <h2>{pack.name}</h2>
@@ -1244,19 +1319,121 @@ function ResourcePacksPage() {
               </label>
 
               <label>
-                Minecraft Version
+                Minecraft Versions
+                <div className="resource-pack-version-grid">
+                  {availableMinecraftVersions.map((item) => (
+                  <label
+                    className="resource-pack-version-option"
+                    key={`${item.version}-${item.edition}`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={minecraftVersions.includes(item.version)}
+                      onChange={() =>
+                        setMinecraftVersions((current) =>
+                          current.includes(item.version)
+                            ? current.filter(
+                                (version) => version !== item.version,
+                              )
+                            : [...current, item.version],
+                        )
+                      }
+                    />
+                    <span>
+                      {item.version}
+                      {item.edition === "bedrock" ? " • Bedrock" : " • Java"}
+                    </span>
+                  </label>
+                ))}
+                </div>
+
+                <div className="resource-pack-custom-version">
+                  <input
+                    type="text"
+                    value={customVersion}
+                    onChange={(event) =>
+                      setCustomVersion(event.target.value)
+                    }
+                    maxLength={30}
+                    placeholder="Custom version, e.g. 1.21.x or 26.1"
+                  />
+                  <button
+                    className="secondary-button"
+                    type="button"
+                    onClick={() => {
+                      const version = customVersion.trim();
+
+                      if (
+                        version &&
+                        !minecraftVersions.includes(version)
+                      ) {
+                        setMinecraftVersions((current) => [
+                          ...current,
+                          version,
+                        ]);
+                      }
+
+                      setCustomVersion("");
+                    }}
+                  >
+                    Add
+                  </button>
+                </div>
+
+                <small>
+                  Selected: {minecraftVersions.length} / {availableMinecraftVersions.length}
+                  {" • "}
+                  Latest: {availableMinecraftVersions[0]?.version ?? "—"}
+                  {" • "}
+                  Oldest: {
+                    availableMinecraftVersions[
+                      availableMinecraftVersions.length - 1
+                    ]?.version ?? "—"
+                  }
+                </small>
+              </label>
+
+              <label>
+                Platform
                 <select
-                  value={minecraftVersion}
+                  value={platform}
                   onChange={(event) =>
-                    setMinecraftVersion(event.target.value)
+                    setPlatform(
+                      event.target.value as
+                        | "java"
+                        | "bedrock"
+                        | "java-bedrock",
+                    )
                   }
                 >
-                  <option value="1.21">1.21</option>
-                  <option value="1.20.6">1.20.6</option>
-                  <option value="1.20.4">1.20.4</option>
-                  <option value="1.20.1">1.20.1</option>
-                  <option value="1.19.4">1.19.4</option>
-                  <option value="Other">Other</option>
+                  <option value="java">Java Edition</option>
+                  <option value="bedrock">Bedrock Edition</option>
+                  <option value="java-bedrock">Java + Bedrock</option>
+                </select>
+              </label>
+
+              <label>
+                Loader / Edition
+                <select
+                  value={loader}
+                  onChange={(event) =>
+                    setLoader(
+                      event.target.value as
+                        | "vanilla"
+                        | "fabric"
+                        | "forge"
+                        | "neoforge"
+                        | "quilt"
+                        | "bedrock",
+                    )
+                  }
+                >
+                  <option value="vanilla">Vanilla</option>
+                  <option value="fabric">Fabric</option>
+                  <option value="forge">Forge</option>
+                  <option value="neoforge">NeoForge</option>
+                  <option value="quilt">Quilt</option>
+                  <option value="bedrock">Bedrock</option>
                 </select>
               </label>
 

@@ -246,14 +246,53 @@ resourcePacksRouter.post(
         req.body?.description,
         1000,
       );
-      const minecraftVersion = safeText(
-        req.body?.minecraftVersion,
-        30,
+      const rawVersions: string[] =
+        Array.isArray(req.body?.minecraftVersions)
+          ? req.body.minecraftVersions.map((value: unknown) =>
+              String(value),
+            )
+          : String(req.body?.minecraftVersions ?? "")
+              .split(",")
+              .map((value) => value.trim())
+              .filter(Boolean);
+
+      const minecraftVersions: string[] = [
+        ...new Set(
+          rawVersions
+            .map((value: string) => safeText(value, 30))
+            .filter(Boolean),
+        ),
+      ].slice(0, 50);
+
+      const platform = safeText(
+        req.body?.platform,
+        20,
       );
+
+      const loader = safeText(
+        req.body?.loader,
+        20,
+      );
+
       const category = safeText(
         req.body?.category,
         40,
       );
+
+      const allowedPlatforms = new Set([
+        "java",
+        "bedrock",
+        "java-bedrock",
+      ]);
+
+      const allowedLoaders = new Set([
+        "vanilla",
+        "fabric",
+        "forge",
+        "neoforge",
+        "quilt",
+        "bedrock",
+      ]);
 
       if (!name || !description) {
         res.status(400).json({
@@ -263,10 +302,34 @@ resourcePacksRouter.post(
         return;
       }
 
-      if (!minecraftVersion || !category) {
+      if (minecraftVersions.length === 0) {
         res.status(400).json({
           ok: false,
-          error: "Minecraft version and category are required.",
+          error: "At least one Minecraft version is required.",
+        });
+        return;
+      }
+
+      if (!allowedPlatforms.has(platform)) {
+        res.status(400).json({
+          ok: false,
+          error: "Invalid Minecraft platform.",
+        });
+        return;
+      }
+
+      if (!allowedLoaders.has(loader)) {
+        res.status(400).json({
+          ok: false,
+          error: "Invalid Minecraft loader.",
+        });
+        return;
+      }
+
+      if (!category) {
+        res.status(400).json({
+          ok: false,
+          error: "Minecraft category is required.",
         });
         return;
       }
@@ -313,7 +376,18 @@ resourcePacksRouter.post(
         id,
         name,
         description,
-        minecraftVersion,
+        minecraftVersions,
+        platform: platform as
+          | "java"
+          | "bedrock"
+          | "java-bedrock",
+        loader: loader as
+          | "vanilla"
+          | "fabric"
+          | "forge"
+          | "neoforge"
+          | "quilt"
+          | "bedrock",
         category,
         author,
         image: imageUrl,

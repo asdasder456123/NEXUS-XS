@@ -2,11 +2,26 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+export type ResourcePackPlatform =
+  | "java"
+  | "bedrock"
+  | "java-bedrock";
+
+export type ResourcePackLoader =
+  | "vanilla"
+  | "fabric"
+  | "forge"
+  | "neoforge"
+  | "quilt"
+  | "bedrock";
+
 export type ResourcePack = {
   id: string;
   name: string;
   description: string;
-  minecraftVersion: string;
+  minecraftVersions: string[];
+  platform: ResourcePackPlatform;
+  loader: ResourcePackLoader;
   category: string;
   author: string;
   image?: string;
