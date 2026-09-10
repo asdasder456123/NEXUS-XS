@@ -18,9 +18,11 @@
     "node": ">=20"
   },
   "dependencies": {
+    "better-sqlite3": "^13.0.3",
     "express-session": "^1.19.0"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
     "@types/express-session": "^1.19.0",
     "concurrently": "^10.0.5"
   }

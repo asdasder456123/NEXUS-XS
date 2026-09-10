@@ -112,6 +112,14 @@ function App() {
         </div>
 
         
+        <button
+          className="account-button"
+          type="button"
+          onClick={() => setLoginOpen(true)}
+        >
+          👤 حسابي
+        </button>
+
         <button className="discord-button" type="button">
           Discord <span>↗</span>
         </button>
@@ -199,17 +207,98 @@ function App() {
             </button>
 
             <div className="eyebrow">NΞXUS XS</div>
+
+            <h2>
+              {authMode === "login"
+                ? "تسجيل الدخول"
+                : "إنشاء حساب"}
+            </h2>
+
             <p>
-              
+              {authMode === "login"
+                ? "سجّل الدخول إلى حسابك في NΞXUS XS."
+                : "أنشئ حسابك الخاص داخل NΞXUS XS."}
             </p>
 
-            <button
-              className="primary-button"
-              type="button"
-              onClick={() => setLoginOpen(false)}
-            >
-              Continue
-            </button>
+            <div className="auth-switch">
+              <button
+                type="button"
+                onClick={() => setAuthMode("login")}
+              >
+                تسجيل الدخول
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setAuthMode("register")}
+              >
+                إنشاء حساب
+              </button>
+            </div>
+
+            <div className="auth-form">
+              <label>
+                اسم المستخدم
+                <input
+                  type="text"
+                  value={authUsername}
+                  onChange={(event) =>
+                    setAuthUsername(event.target.value)
+                  }
+                  autoComplete="username"
+                />
+              </label>
+
+              <label>
+                كلمة المرور
+                <input
+                  type="password"
+                  value={authPassword}
+                  onChange={(event) =>
+                    setAuthPassword(event.target.value)
+                  }
+                  autoComplete={
+                    authMode === "login"
+                      ? "current-password"
+                      : "new-password"
+                  }
+                />
+              </label>
+
+              {authMode === "register" && (
+                <label>
+                  تأكيد كلمة المرور
+                  <input
+                    type="password"
+                    value={authConfirmPassword}
+                    onChange={(event) =>
+                      setAuthConfirmPassword(event.target.value)
+                    }
+                    autoComplete="new-password"
+                  />
+                </label>
+              )}
+
+              {authError && (
+                <div className="auth-error">
+                  {authError}
+                </div>
+              )}
+
+              <button
+                className="primary-button"
+                type="button"
+                onClick={() => void submitAuth()}
+                disabled={authLoading}
+              >
+                {authLoading
+                  ? "جاري التنفيذ..."
+                  : authMode === "login"
+                    ? "دخول"
+                    : "إنشاء الحساب"}
+              </button>
+            </div>
+
           </div>
         </div>
       )}
