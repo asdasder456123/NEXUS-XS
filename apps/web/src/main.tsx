@@ -191,117 +191,236 @@ function App() {
 
       {loginOpen && (
         <div
-          className="modal-backdrop"
+          className="account-overlay"
           onClick={() => setLoginOpen(false)}
         >
           <div
-            className="modal"
+            className="account-center"
             onClick={(event) => event.stopPropagation()}
           >
             <button
-              className="modal-close"
+              className="account-close"
               type="button"
               onClick={() => setLoginOpen(false)}
+              aria-label="إغلاق"
             >
               ×
             </button>
 
-            <div className="eyebrow">NΞXUS XS</div>
+            {currentUser ? (
+              <>
+                <div className="account-hero">
+                  <div className="account-avatar">
+                    👤
+                  </div>
 
-            <h2>
-              {authMode === "login"
-                ? "تسجيل الدخول"
-                : "إنشاء حساب"}
-            </h2>
+                  <div>
+                    <div className="account-kicker">
+                      NΞXUS XS ACCOUNT
+                    </div>
 
-            <p>
-              {authMode === "login"
-                ? "سجّل الدخول إلى حسابك في NΞXUS XS."
-                : "أنشئ حسابك الخاص داخل NΞXUS XS."}
-            </p>
+                    <h2>{currentUser.username}</h2>
 
-            <div className="auth-switch">
-              <button
-                type="button"
-                onClick={() => setAuthMode("login")}
-              >
-                تسجيل الدخول
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setAuthMode("register")}
-              >
-                إنشاء حساب
-              </button>
-            </div>
-
-            <div className="auth-form">
-              <label>
-                اسم المستخدم
-                <input
-                  type="text"
-                  value={authUsername}
-                  onChange={(event) =>
-                    setAuthUsername(event.target.value)
-                  }
-                  autoComplete="username"
-                />
-              </label>
-
-              <label>
-                كلمة المرور
-                <input
-                  type="password"
-                  value={authPassword}
-                  onChange={(event) =>
-                    setAuthPassword(event.target.value)
-                  }
-                  autoComplete={
-                    authMode === "login"
-                      ? "current-password"
-                      : "new-password"
-                  }
-                />
-              </label>
-
-              {authMode === "register" && (
-                <label>
-                  تأكيد كلمة المرور
-                  <input
-                    type="password"
-                    value={authConfirmPassword}
-                    onChange={(event) =>
-                      setAuthConfirmPassword(event.target.value)
-                    }
-                    autoComplete="new-password"
-                  />
-                </label>
-              )}
-
-              {authError && (
-                <div className="auth-error">
-                  {authError}
+                    <span className="account-status">
+                      <span className="account-status-dot" />
+                      الحساب نشط
+                    </span>
+                  </div>
                 </div>
-              )}
 
-              <button
-                className="primary-button"
-                type="button"
-                onClick={() => void submitAuth()}
-                disabled={authLoading}
-              >
-                {authLoading
-                  ? "جاري التنفيذ..."
-                  : authMode === "login"
-                    ? "دخول"
-                    : "إنشاء الحساب"}
-              </button>
-            </div>
+                <div className="account-grid">
+                  <div className="account-card">
+                    <span>👤</span>
+                    <small>اسم المستخدم</small>
+                    <strong>{currentUser.username}</strong>
+                  </div>
 
+                  <div className="account-card">
+                    <span>🛡️</span>
+                    <small>الأمان</small>
+                    <strong>محمي</strong>
+                  </div>
+
+                  <div className="account-card">
+                    <span>🌐</span>
+                    <small>المنصة</small>
+                    <strong>NΞXUS XS</strong>
+                  </div>
+                </div>
+
+                <div className="account-actions">
+                  <button
+                    type="button"
+                    className="account-action"
+                    onClick={() => {
+                      setAuthError("");
+                      setAuthMode("login");
+                    }}
+                  >
+                    <span>⚙️</span>
+                    <div>
+                      <strong>إعدادات الحساب</strong>
+                      <small>إدارة حسابك وإعداداتك</small>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    className="account-action danger"
+                    onClick={() => {
+                      fetch(`${API_URL}/auth/logout`, {
+                        method: "POST",
+                        credentials: "include",
+                      })
+                        .then(() => {
+                          setCurrentUser(null);
+                          setLoginOpen(false);
+                        })
+                        .catch((error) => {
+                          console.error(
+                            "[Auth] Logout failed:",
+                            error,
+                          );
+                        });
+                    }}
+                  >
+                    <span>🚪</span>
+                    <div>
+                      <strong>تسجيل الخروج</strong>
+                      <small>الخروج من حساب NΞXUS XS</small>
+                    </div>
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="account-brand">
+                  <div className="account-avatar large">
+                    ✦
+                  </div>
+
+                  <div className="account-kicker">
+                    NΞXUS XS
+                  </div>
+
+                  <h2>
+                    {authMode === "login"
+                      ? "مرحبًا بعودتك"
+                      : "انضم إلى NΞXUS XS"}
+                  </h2>
+
+                  <p>
+                    {authMode === "login"
+                      ? "سجّل الدخول للوصول إلى حسابك."
+                      : "أنشئ حسابك الخاص داخل شبكة NΞXUS XS."}
+                  </p>
+                </div>
+
+                <div className="auth-switch">
+                  <button
+                    type="button"
+                    className={
+                      authMode === "login"
+                        ? "active"
+                        : ""
+                    }
+                    onClick={() => {
+                      setAuthMode("login");
+                      setAuthError("");
+                    }}
+                  >
+                    تسجيل الدخول
+                  </button>
+
+                  <button
+                    type="button"
+                    className={
+                      authMode === "register"
+                        ? "active"
+                        : ""
+                    }
+                    onClick={() => {
+                      setAuthMode("register");
+                      setAuthError("");
+                    }}
+                  >
+                    إنشاء حساب
+                  </button>
+                </div>
+
+                <div className="auth-form">
+                  <label>
+                    اسم المستخدم
+                    <input
+                      type="text"
+                      value={authUsername}
+                      onChange={(event) =>
+                        setAuthUsername(event.target.value)
+                      }
+                      placeholder="Username"
+                      autoComplete="username"
+                    />
+                  </label>
+
+                  <label>
+                    كلمة المرور
+                    <input
+                      type="password"
+                      value={authPassword}
+                      onChange={(event) =>
+                        setAuthPassword(event.target.value)
+                      }
+                      placeholder="Password"
+                      autoComplete={
+                        authMode === "login"
+                          ? "current-password"
+                          : "new-password"
+                      }
+                    />
+                  </label>
+
+                  {authMode === "register" && (
+                    <label>
+                      تأكيد كلمة المرور
+                      <input
+                        type="password"
+                        value={authConfirmPassword}
+                        onChange={(event) =>
+                          setAuthConfirmPassword(
+                            event.target.value,
+                          )
+                        }
+                        placeholder="Confirm password"
+                        autoComplete="new-password"
+                      />
+                    </label>
+                  )}
+
+                  {authError && (
+                    <div className="auth-error">
+                      {authError}
+                    </div>
+                  )}
+
+                  <button
+                    className="primary-button account-submit"
+                    type="button"
+                    onClick={() => void submitAuth()}
+                    disabled={authLoading}
+                  >
+                    {authLoading
+                      ? "جاري التنفيذ..."
+                      : authMode === "login"
+                        ? "دخول إلى الحساب"
+                        : "إنشاء الحساب"}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
+
     </div>
   );
 }
