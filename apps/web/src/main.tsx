@@ -112,13 +112,7 @@ function App() {
         </div>
 
         
-        <button
-          className="account-button"
-          type="button"
-          onClick={() => setLoginOpen(true)}
-        >
-          👤 حسابي
-        </button>
+        
 
         <button className="discord-button" type="button">
           Discord <span>↗</span>
