@@ -91,6 +91,62 @@ const systemPrompt = fs.readFileSync(
   "utf8"
 );
 
+// تقسيم system.txt إلى أجزاء صغيرة.
+// الملف الأصلي لا يتم تعديله أو حذف أي شيء منه.
+const systemWords = systemPrompt.split(/\\s+/).filter(Boolean);
+const SYSTEM_CHUNK_WORDS = 180;
+
+const systemChunks = [];
+
+for (let i = 0; i < systemWords.length; i += SYSTEM_CHUNK_WORDS) {
+  systemChunks.push(
+    systemWords.slice(i, i + SYSTEM_CHUNK_WORDS).join(" ")
+  );
+}
+
+// جزء أساسي صغير يظل حاضرًا دائمًا.
+const systemCore = systemWords
+  .slice(0, 120)
+  .join(" ");
+
+function getRelevantSystem(userText) {
+  const text = String(userText || "").toLowerCase();
+  const words = new Set(
+    text
+      .split(/[^\\p{L}\\p{N}_]+/u)
+      .filter(word => word.length >= 3)
+  );
+
+  const scored = systemChunks.map((chunk, index) => {
+    const chunkWords = chunk
+      .toLowerCase()
+      .split(/[^\\p{L}\\p{N}_]+/u)
+      .filter(word => word.length >= 3);
+
+    let score = 0;
+
+    for (const word of chunkWords) {
+      if (words.has(word)) score++;
+    }
+
+    return { index, chunk, score };
+  });
+
+  scored.sort((a, b) => b.score - a.score);
+
+  // نقرأ جزءًا واحدًا فقط في العادة.
+  // لو مفيش تطابق واضح، نستخدم جزءًا واحدًا بالتسلسل.
+  let selected = scored[0];
+
+  if (!selected || selected.score === 0) {
+    const index = Math.floor(Date.now() / 1000) % systemChunks.length;
+    selected = systemChunks[index];
+    return systemCore + "\\n\\n" + selected;
+  }
+
+  return systemCore + "\\n\\n" + selected.chunk;
+}
+
 let maintenance = {
   enabled: false,
   message: "⚙️ Super ABG حاليا تحت التطوير والتحديث، حاول لاحقاً."
@@ -388,7 +444,7 @@ client.on("messageCreate", async message => {
         messages:[
           {
             role:"system",
-            content: systemPrompt
+            content: getRelevantSystem(text)
           },
 
           ...memory[userId]
