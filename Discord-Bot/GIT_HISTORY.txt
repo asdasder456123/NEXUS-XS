@@ -1,0 +1,23 @@
+[33mcommit 08d288826065d9bdf9918f9a127e255a7b56ce38[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m)[m
+Author:     محمد عادل <إيميل GitHub بتاعك>
+AuthorDate: Sun Jul 26 16:34:50 2026 +0300
+Commit:     محمد عادل <إيميل GitHub بتاعك>
+CommitDate: Sun Jul 26 16:34:50 2026 +0300
+
+    Update Super ABG by Muhammad Adel
+
+[33mcommit e4a7f716c1dc2f27e308a78350343c740a5613f0[m
+Author:     asdasder456123 <12345678+asdasder456123@users.noreply.github.com>
+AuthorDate: Sun Jul 26 16:25:07 2026 +0300
+Commit:     asdasder456123 <12345678+asdasder456123@users.noreply.github.com>
+CommitDate: Sun Jul 26 16:25:07 2026 +0300
+
+    Add open source license and documentation
+
+[33mcommit b3380d4ba5058e5671e87a9874d48e245d076b8f[m
+Author:     asdasder456123 <12345678+asdasder456123@users.noreply.github.com>
+AuthorDate: Sun Jul 26 16:23:47 2026 +0300
+Commit:     asdasder456123 <12345678+asdasder456123@users.noreply.github.com>
+CommitDate: Sun Jul 26 16:23:47 2026 +0300
+
+    Initial Super ABG release

@@ -1,0 +1,53 @@
+# ==============================
+# Super ABG - Local files
+# ==============================
+
+# Secrets / private configuration
+.env
+.env.*
+!.env.example
+config.json
+config.yaml
+
+# Dependencies / environments
+node_modules/
+venv/
+
+# Runtime data
+cache/
+database/
+logs/
+logs.txt
+memory.json
+
+# Local databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Backups / temporary files
+*.backup*
+*.before-*
+*.bak
+*.tmp
+*.old
+
+# Generated audio
+*.pcm
+*.wav
+*.mp3
+
+# Build / IDE / OS
+dist/
+build/
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Debug output
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

@@ -1,0 +1,73 @@
+# ============================================================
+# Super ABG Configuration Example
+# Copy this file to config.yaml
+# Secrets are stored in .env
+# ============================================================
+
+platform:
+  discord:
+    enabled: true
+    bot_token: "${DISCORD_TOKEN}"
+
+bot:
+  name: "Super ABG"
+  developer: "محمد عادل"
+
+admin_user_id: 123456789
+
+debug: false
+
+response:
+  min_delay_seconds: 1.0
+  max_delay_seconds: 5.0
+  random_trigger_probability: 0.05
+
+whisper:
+  model: large-v3-turbo
+  language: auto
+  cpu_threads: 2
+
+memory:
+  enabled: true
+  file: memory.json
+  max_messages_per_user: 20
+
+analysis:
+  enabled: true
+  no_fake_information: true
+  ask_when_uncertain: true
+
+embedding_model: intfloat/multilingual-e5-large
+
+ai:
+  timeout_seconds: 60
+  max_retries: 3
+
+  providers:
+
+    - name: my_groq
+      type: openai
+      base_url: https://api.groq.com/openai/v1
+      api_key: "${GROQ_API_KEY}"
+      model: llama-3.3-70b-versatile
+
+    - name: my_deepseek
+      type: openai
+      base_url: https://api.deepseek.com
+      api_key: "${DEEPSEEK_API_KEY}"
+      model: deepseek-chat
+
+    - name: my_local_ollama
+      type: openai
+      base_url: http://localhost:11434/v1
+      api_key: ollama
+      model: llama3.2
+      concurrency: 1
+
+  primary: my_groq
+
+  fallbacks:
+    - my_deepseek
+    - my_local_ollama
+
+  rotation: failover
