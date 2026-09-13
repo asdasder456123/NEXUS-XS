@@ -17,6 +17,8 @@ venv/
 cache/
 database/
 logs/
+!src/logs/
+!src/logs/**
 logs.txt
 memory.json
 
