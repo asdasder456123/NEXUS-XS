@@ -93,7 +93,7 @@ const systemPrompt = fs.readFileSync(
 
 // تقسيم system.txt إلى أجزاء صغيرة.
 // الملف الأصلي لا يتم تعديله أو حذف أي شيء منه.
-const systemWords = systemPrompt.split(/\\s+/).filter(Boolean);
+const systemWords = systemPrompt.split(/\s+/).filter(Boolean);
 const SYSTEM_CHUNK_WORDS = 180;
 
 const systemChunks = [];
@@ -113,14 +113,14 @@ function getRelevantSystem(userText) {
   const text = String(userText || "").toLowerCase();
   const words = new Set(
     text
-      .split(/[^\\p{L}\\p{N}_]+/u)
+      .split(/[^\p{L}\p{N}_]+/u)
       .filter(word => word.length >= 3)
   );
 
   const scored = systemChunks.map((chunk, index) => {
     const chunkWords = chunk
       .toLowerCase()
-      .split(/[^\\p{L}\\p{N}_]+/u)
+      .split(/[^\p{L}\p{N}_]+/u)
       .filter(word => word.length >= 3);
 
     let score = 0;
@@ -141,10 +141,10 @@ function getRelevantSystem(userText) {
   if (!selected || selected.score === 0) {
     const index = Math.floor(Date.now() / 1000) % systemChunks.length;
     selected = systemChunks[index];
-    return systemCore + "\\n\\n" + selected;
+    return systemCore + "\n\n" + selected;
   }
 
-  return systemCore + "\\n\\n" + selected.chunk;
+  return systemCore + "\n\n" + selected.chunk;
 }
 
 let maintenance = {
