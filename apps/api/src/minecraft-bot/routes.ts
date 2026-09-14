@@ -18,7 +18,6 @@ type BotRecord = {
   bot: Bot | null;
   status: BotStatus;
   autoReconnect: boolean;
-  reconnectTimer?: ReturnType<typeof setTimeout>;
   connectionId: number;
 };
 
@@ -36,7 +35,6 @@ const messages: ChatMessage[] = [];
 let activeBotKey: string | null = null;
 let messageId = 1;
 
-const RECONNECT_DELAY = 5_000;
 const CONNECT_TIMEOUT = 30_000;
 
 function addMessage(
@@ -92,50 +90,13 @@ function sendMinecraftCommand(record: BotRecord, command: string) {
   record.bot.chat(normalized);
 }
 
-function clearReconnectTimer(record: BotRecord) {
-  if (record.reconnectTimer) {
-    clearTimeout(record.reconnectTimer);
-    record.reconnectTimer = undefined;
-  }
-}
-
-function scheduleReconnect(record: BotRecord) {
-  if (!record.autoReconnect) {
-    return;
-  }
-
-  clearReconnectTimer(record);
-
-  record.status = "offline";
-
-  console.log(
-    `[Minecraft:${record.username}] Reconnecting in ${RECONNECT_DELAY / 1000}s...`,
-  );
-
-  addMessage(
-    "assistant",
-    "MC",
-    `🔄 سيتم إعادة اتصال البوت ${botInfo(record)} خلال 5 ثوانٍ...`,
-  );
-
-  record.reconnectTimer = setTimeout(() => {
-    record.reconnectTimer = undefined;
-
-    if (!record.autoReconnect) {
-      return;
-    }
-
-    connectBot(record);
-  }, RECONNECT_DELAY);
-}
-
 function connectBot(record: BotRecord) {
-  if (!record.autoReconnect) {
-    return;
-  }
-
-  clearReconnectTimer(record);
-
+  /*
+   * مهم:
+   * لا يوجد Auto-Reconnect.
+   * كل استدعاء لـ !start ينشئ Bot واحد فقط.
+   * إذا فشل الاتصال أو خرج Bot، يتوقف هذا الـBot فقط.
+   */
   const connectionId = ++record.connectionId;
 
   record.status = "connecting";
@@ -160,41 +121,63 @@ function connectBot(record: BotRecord) {
     );
 
     record.status = "error";
+    record.bot = null;
 
     addMessage(
       "assistant",
       "MC",
-      `❌ فشل إنشاء البوت ${botInfo(record)}. سيتم إعادة المحاولة تلقائيًا.`,
+      `❌ فشل إنشاء البوت ${botInfo(record)}. البوت توقف، حاول تشغيله مرة أخرى.`,
     );
 
-    scheduleReconnect(record);
     return;
   }
 
   record.bot = bot;
 
   let finished = false;
+  let failureReported = false;
 
-  const timeout = setTimeout(() => {
-    if (finished || connectionId !== record.connectionId) {
+  const stopThisBot = (
+    message: string,
+    status: BotStatus = "stopped",
+  ) => {
+    if (connectionId !== record.connectionId) {
+      return;
+    }
+
+    if (finished && failureReported) {
       return;
     }
 
     finished = true;
+    failureReported = true;
 
-    record.status = "error";
+    record.status = status;
 
-    addMessage(
-      "assistant",
-      "MC",
-      `⏱️ انتهت مهلة الاتصال: ${botInfo(record)} — إعادة المحاولة تلقائيًا.`,
+    if (record.bot === bot) {
+      record.bot = null;
+    }
+
+    if (activeBotKey === record.key) {
+      activeBotKey = null;
+    }
+
+    addMessage("assistant", "MC", message);
+  };
+
+  const timeout = setTimeout(() => {
+    if (connectionId !== record.connectionId) {
+      return;
+    }
+
+    stopThisBot(
+      `⏱️ انتهت مهلة الاتصال للبوت ${botInfo(record)}. البوت توقف، حاول تشغيله مرة أخرى.`,
+      "stopped",
     );
 
     try {
       bot.quit("Connection timeout");
     } catch {}
-
-    scheduleReconnect(record);
   }, CONNECT_TIMEOUT);
 
   bot.once("spawn", () => {
@@ -204,7 +187,9 @@ function connectBot(record: BotRecord) {
 
     clearTimeout(timeout);
 
-    finished = true;
+    finished = false;
+    failureReported = false;
+
     record.status = "online";
     record.bot = bot;
 
@@ -222,6 +207,10 @@ function connectBot(record: BotRecord) {
   });
 
   bot.on("messagestr", (message) => {
+    if (connectionId !== record.connectionId) {
+      return;
+    }
+
     const text = String(message).trim();
 
     if (!text) {
@@ -243,13 +232,20 @@ function connectBot(record: BotRecord) {
       error,
     );
 
-    record.status = "error";
+    clearTimeout(timeout);
 
-    addMessage(
-      "assistant",
-      "MC",
-      `❌ خطأ في البوت ${botInfo(record)}: ${error.message}`,
+    stopThisBot(
+      `❌ خطأ في البوت ${botInfo(record)}: ${
+        error instanceof Error
+          ? error.message
+          : "Unknown error"
+      } — البوت توقف، حاول تشغيله مرة أخرى.`,
+      "error",
     );
+
+    try {
+      bot.quit("Bot error");
+    } catch {}
   });
 
   bot.on("end", () => {
@@ -271,27 +267,17 @@ function connectBot(record: BotRecord) {
       `[Minecraft:${record.username}] Connection ended.`,
     );
 
-    if (!record.autoReconnect) {
-      record.status = "stopped";
-
-      addMessage(
-        "assistant",
-        "MC",
-        `🛑 تم إيقاف البوت: ${botInfo(record)}`,
-      );
-
+    if (record.status === "stopped" || failureReported) {
       return;
     }
 
-    record.status = "offline";
+    record.status = "stopped";
 
     addMessage(
       "assistant",
       "MC",
-      `🔴 البوت خرج من السيرفر: ${botInfo(record)} — سيتم إعادة تشغيله تلقائيًا.`,
+      `🔴 البوت خرج من السيرفر: ${botInfo(record)} — تم إيقافه. حاول تشغيله مرة أخرى.`,
     );
-
-    scheduleReconnect(record);
   });
 }
 
@@ -362,8 +348,6 @@ router.post("/chat", (req, res) => {
     const existing = bots.get(key);
 
     if (existing) {
-      existing.autoReconnect = true;
-
       if (
         existing.status === "online" ||
         existing.status === "connecting"
@@ -377,7 +361,14 @@ router.post("/chat", (req, res) => {
         return res.json({ ok: true });
       }
 
-      clearReconnectTimer(existing);
+      /*
+       * نفس Bot لا يتم إنشاء نسخة ثانية منه.
+       * المستخدم يستطيع تشغيله مرة أخرى يدويًا.
+       */
+      existing.connectionId++;
+      existing.autoReconnect = false;
+      existing.status = "connecting";
+      existing.bot = null;
 
       addMessage(
         "assistant",
@@ -397,7 +388,7 @@ router.post("/chat", (req, res) => {
       username,
       bot: null,
       status: "connecting",
-      autoReconnect: true,
+      autoReconnect: false,
       connectionId: 0,
     };
 
@@ -406,7 +397,7 @@ router.post("/chat", (req, res) => {
     addMessage(
       "assistant",
       "MC",
-      `🟡 جاري تشغيل البوت ${username} على ${host}:${port} — إعادة الاتصال التلقائي مفعلة.`,
+      `🟡 جاري تشغيل البوت ${username} على ${host}:${port} — إعادة الاتصال التلقائي معطلة.`,
     );
 
     connectBot(record);
@@ -445,10 +436,9 @@ router.post("/chat", (req, res) => {
       return res.json({ ok: true });
     }
 
+    record.connectionId++;
     record.autoReconnect = false;
     record.status = "stopped";
-
-    clearReconnectTimer(record);
 
     if (activeBotKey === record.key) {
       activeBotKey = null;
@@ -466,7 +456,7 @@ router.post("/chat", (req, res) => {
     addMessage(
       "assistant",
       "MC",
-      `🛑 تم إيقاف البوت وإلغاء إعادة الاتصال التلقائي: ${botInfo(record)}`,
+      `🛑 تم إيقاف البوت: ${botInfo(record)}`,
     );
 
     return res.json({ ok: true });
@@ -506,9 +496,7 @@ router.post("/chat", (req, res) => {
     addMessage(
       "assistant",
       "MC",
-      `ℹ️ ${botInfo(record)} — الحالة: ${record.status} — Auto-Reconnect: ${
-        record.autoReconnect ? "ON" : "OFF"
-      }`,
+      `ℹ️ ${botInfo(record)} — الحالة: ${record.status} — Auto-Reconnect: OFF`,
     );
 
     return res.json({ ok: true });
