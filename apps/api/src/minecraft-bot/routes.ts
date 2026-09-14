@@ -310,11 +310,11 @@ router.post("/chat", (req, res) => {
   const { command, args } = parseCommand(text);
 
   if (command === "!start") {
-    if (args.length < 3) {
+    if (args.length < 4) {
       addMessage(
         "assistant",
         "MC",
-        "❌ الاستخدام: !start IP PORT BOT_NAME",
+        "❌ الاستخدام: !start IP PORT BOT_NAME COUNT",
       );
 
       return res.json({ ok: true });
@@ -322,7 +322,8 @@ router.post("/chat", (req, res) => {
 
     const host = args[0];
     const port = Number(args[1]);
-    const username = args[2];
+    const baseUsername = args[2];
+    const count = Number(args[3]);
 
     if (
       !host ||
@@ -339,68 +340,69 @@ router.post("/chat", (req, res) => {
       return res.json({ ok: true });
     }
 
-    const key = botKey(
-      host,
-      port,
-      username,
-    );
-
-    const existing = bots.get(key);
-
-    if (existing) {
-      if (
-        existing.status === "online" ||
-        existing.status === "connecting"
-      ) {
-        addMessage(
-          "assistant",
-          "MC",
-          `⚠️ البوت يعمل بالفعل: ${botInfo(existing)} — الحالة: ${existing.status}`,
-        );
-
-        return res.json({ ok: true });
-      }
-
-      /*
-       * نفس Bot لا يتم إنشاء نسخة ثانية منه.
-       * المستخدم يستطيع تشغيله مرة أخرى يدويًا.
-       */
-      existing.connectionId++;
-      existing.autoReconnect = false;
-      existing.status = "connecting";
-      existing.bot = null;
-
+    if (
+      !baseUsername ||
+      !Number.isInteger(count) ||
+      count < 1
+    ) {
       addMessage(
         "assistant",
         "MC",
-        `🔄 إعادة تشغيل البوت: ${botInfo(existing)}...`,
+        "❌ اسم البوت أو العدد غير صالح.",
       );
-
-      connectBot(existing);
 
       return res.json({ ok: true });
     }
 
-    const record: BotRecord = {
-      key,
-      host,
-      port,
-      username,
-      bot: null,
-      status: "connecting",
-      autoReconnect: false,
-      connectionId: 0,
-    };
+    let started = 0;
+    let alreadyRunning = 0;
 
-    bots.set(key, record);
+    for (let i = 1; i <= count; i++) {
+      const username = `${baseUsername}${i}`;
+      const key = botKey(host, port, username);
+      const existing = bots.get(key);
+
+      if (existing) {
+        if (
+          existing.status === "online" ||
+          existing.status === "connecting"
+        ) {
+          alreadyRunning++;
+          continue;
+        }
+
+        existing.connectionId++;
+        existing.autoReconnect = false;
+        existing.status = "connecting";
+        existing.bot = null;
+
+        connectBot(existing);
+        started++;
+        continue;
+      }
+
+      const record: BotRecord = {
+        key,
+        host,
+        port,
+        username,
+        bot: null,
+        status: "connecting",
+        autoReconnect: false,
+        connectionId: 0,
+      };
+
+      bots.set(key, record);
+
+      connectBot(record);
+      started++;
+    }
 
     addMessage(
       "assistant",
       "MC",
-      `🟡 جاري تشغيل البوت ${username} على ${host}:${port} — إعادة الاتصال التلقائي معطلة.`,
+      `🟢 تم طلب تشغيل ${count} بوت: ${baseUsername}1 → ${baseUsername}${count} على ${host}:${port}. بدأ ${started}، والموجود بالفعل ${alreadyRunning}. إعادة الاتصال التلقائي معطلة.`,
     );
-
-    connectBot(record);
 
     return res.json({ ok: true });
   }
