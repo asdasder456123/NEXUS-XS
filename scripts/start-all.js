@@ -35,7 +35,7 @@ function start(name, command, args, cwd) {
 }
 
 console.log("[NEXUS-XS] Starting unified runtime...");
-console.log("[NEXUS-XS] NEXUS and Discord-Bot are running as separate processes.");
+console.log("[NEXUS-XS] NEXUS runtime is running.");
 
 start(
   "NEXUS",
@@ -44,12 +44,6 @@ start(
   process.cwd()
 );
 
-start(
-  "DISCORD",
-  process.execPath,
-  ["index.js"],
-  `${process.cwd()}/Discord-Bot`
-);
 
 console.log("[NEXUS-XS] Unified runtime is alive.");
 
