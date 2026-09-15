@@ -44,6 +44,13 @@ start(
   process.cwd()
 );
 
+start(
+  "ShinAI",
+  "python3",
+  ["main.py"],
+  `${process.cwd()}/ShinAI-copy`
+);
+
 
 console.log("[NEXUS-XS] Unified runtime is alive.");
 
