@@ -438,7 +438,7 @@ client.on("messageCreate", async message => {
       await groq.chat.completions.create({
 
         model: modelConfig.model,
-        max_tokens: 180,
+        max_tokens: String(text || "").trim().length <= 80 ? 80 : 180,
         temperature: 0.7,
 
         messages:[
@@ -543,7 +543,15 @@ client.on("messageCreate", async message => {
 
     await message.reply({
 
-      content:"⚠️ حصل خطأ داخلي.",
+      content: (
+        err?.status === 429 ||
+        err?.statusCode === 429 ||
+        err?.code === 429 ||
+        String(err?.message || "").includes("Rate limit") ||
+        String(err?.message || "").includes("rate_limit_exceeded")
+      )
+        ? "⚠️ مفتاح الذكاء الاصطناعي وصل للحد المؤقت حاليًا. جرّب مرة ثانية بعد تجدد الحصة."
+        : "⚠️ حصل خطأ داخلي.",
 
       allowedMentions:{
         repliedUser:false
