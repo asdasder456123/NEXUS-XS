@@ -65,9 +65,9 @@ const sections: Section[] = [
     description: "AI workspace powered by Groq.",
   },
   {
-    icon: "⚒",
-    name: "Rules",
-    description: "NΞXUS XS rules and developer standards.",
+    icon: "◈",
+    name: "GitHub",
+    description: "Free GitHub project workspace for NΞXUS XS users.",
   },
 ];
 
@@ -345,10 +345,10 @@ function Home({ navigate }: {
       action: "NΞXUS XS AI",
     },
     {
-      icon: "⚒",
-      title: "Rules",
-      text: "Network rules, standards, and developer guidelines.",
-      action: "Rules",
+      icon: "◈",
+      title: "GitHub",
+      text: "Free workspace for sharing and managing GitHub projects.",
+      action: "GitHub",
     },
   ];
 
@@ -954,8 +954,8 @@ function ServicePage({ section }: { section: Section }) {
     return <ResourcePacksPage />;
   }
 
-  if (section.name === "Rules") {
-    return <RulesPage />;
+  if (section.name === "GitHub") {
+    return <GitHubPage />;
   }
 
   if (section.name === "News") {
@@ -1495,37 +1495,196 @@ function ResourcePacksPage() {
   );
 }
 
-function RulesPage() {
-  const rules = [
-    "احترام حقوق أصحاب المشاريع والمحتوى.",
-    "يجب توضيح مصدر أي كود أو مشروع خارجي.",
-    "احترام شروط التراخيص الأصلية.",
-    "لا تنسب عمل شخص آخر إلى نفسك.",
-    "لا ترفع محتوى مجهول المصدر على أنه ملكك.",
-    "أي Fork يجب أن يحافظ على متطلبات الترخيص.",
-    "أضف الاعتمادات المطلوبة للمطورين والمساهمين.",
-    "يُمنع انتحال هوية المطورين أو المشاريع.",
-    "يُمنع استخدام الشبكة لنشر محتوى ضار أو غير قانوني.",
-    "الشفافية مطلوبة عند مشاركة المشاريع والأدوات.",
-  ];
+function GitHubPage() {
+  const [repositoryUrl, setRepositoryUrl] = useState("");
+  const [projects, setProjects] = useState<
+    {
+      id: string;
+      url: string;
+      name: string;
+      description: string;
+    }[]
+  >([]);
+
+  function addRepository() {
+    const url = repositoryUrl.trim();
+
+    if (!url) return;
+
+    try {
+      const parsed = new URL(url);
+
+      if (parsed.hostname !== "github.com") {
+        return;
+      }
+
+      const parts = parsed.pathname
+        .split("/")
+        .filter(Boolean);
+
+      if (parts.length < 2) {
+        return;
+      }
+
+      const owner = parts[0];
+      const repo = parts[1].replace(/\.git$/, "");
+
+      const exists = projects.some(
+        (project) => project.url === parsed.href,
+      );
+
+      if (exists) {
+        setRepositoryUrl("");
+        return;
+      }
+
+      setProjects((current) => [
+        ...current,
+        {
+          id: `${owner}/${repo}`,
+          url: `https://github.com/${owner}/${repo}`,
+          name: repo,
+          description: `GitHub repository by ${owner}.`,
+        },
+      ]);
+
+      setRepositoryUrl("");
+    } catch {
+      // Invalid repository URLs are ignored by the first UI-only version.
+    }
+  }
+
+  function removeRepository(id: string) {
+    setProjects((current) =>
+      current.filter((project) => project.id !== id),
+    );
+  }
 
   return (
-    <section className="service-page rules-page">
-      <div className="eyebrow">NETWORK POLICY</div>
-      <h1>NΞXUS XS Rules</h1>
-      <p className="page-description">
-        قواعد أساسية للحفاظ على بيئة تطوير منظمة وموثوقة.
-      </p>
+    <section className="service-page github-page">
+      <div className="eyebrow">NΞXUS XS • GITHUB</div>
 
-      <div className="rules-grid">
-        {rules.map((rule, index) => (
-          <article className="rule-card" key={rule}>
-            <span className="rule-number">
-              {String(index + 1).padStart(2, "0")}
-            </span>
-            <p>{rule}</p>
-          </article>
-        ))}
+      <div className="github-header">
+        <div>
+          <h1>GitHub Workspace</h1>
+          <p className="page-description">
+            مساحة مجانية لمشاركة مشاريع GitHub والوصول إليها من داخل
+            NΞXUS XS.
+          </p>
+        </div>
+
+        <a
+          className="github-profile-button"
+          href="https://github.com"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          GitHub <span>↗</span>
+        </a>
+      </div>
+
+      <div className="github-add-card">
+        <div className="github-add-icon">+</div>
+
+        <div className="github-add-content">
+          <h2>Add a project</h2>
+          <p>
+            أضف رابط Repository عام من GitHub علشان يظهر مشروعك داخل
+            مساحة NΞXUS XS.
+          </p>
+
+          <div className="github-add-form">
+            <input
+              type="url"
+              value={repositoryUrl}
+              onChange={(event) =>
+                setRepositoryUrl(event.target.value)
+              }
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  addRepository();
+                }
+              }}
+              placeholder="https://github.com/username/project"
+              aria-label="GitHub repository URL"
+            />
+
+            <button
+              className="primary-button"
+              type="button"
+              onClick={addRepository}
+              disabled={!repositoryUrl.trim()}
+            >
+              Add Project
+              <span>→</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="github-section-header">
+        <div>
+          <div className="eyebrow">PROJECTS</div>
+          <h2>Your GitHub projects</h2>
+        </div>
+
+        <span className="github-project-count">
+          {projects.length} project{projects.length === 1 ? "" : "s"}
+        </span>
+      </div>
+
+      {projects.length === 0 ? (
+        <div className="github-empty">
+          <div className="github-empty-icon">◈</div>
+          <strong>No projects yet</strong>
+          <p>
+            أضف أول GitHub Repository علشان يبدأ يظهر هنا.
+          </p>
+        </div>
+      ) : (
+        <div className="github-project-grid">
+          {projects.map((project) => (
+            <article className="github-project-card" key={project.id}>
+              <div className="github-project-top">
+                <span className="github-project-icon">◈</span>
+
+                <button
+                  className="github-remove-button"
+                  type="button"
+                  onClick={() => removeRepository(project.id)}
+                  aria-label={`Remove ${project.name}`}
+                >
+                  ×
+                </button>
+              </div>
+
+              <h3>{project.name}</h3>
+              <p>{project.description}</p>
+
+              <div className="github-project-actions">
+                <a
+                  href={project.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Open on GitHub <span>↗</span>
+                </a>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
+
+      <div className="github-notice">
+        <span>◆</span>
+        <div>
+          <strong>Free &amp; GitHub-based</strong>
+          <p>
+            المشروع يفضل موجود على GitHub، وNΞXUS XS لا يشغّل كود
+            المستخدمين على السيرفر في هذه المرحلة.
+          </p>
+        </div>
       </div>
     </section>
   );
