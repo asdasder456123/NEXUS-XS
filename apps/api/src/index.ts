@@ -20,6 +20,7 @@ import { startDiscordNewsBot } from "./discord-bot/index.js";
 import { newsRouter } from "./news/routes.js";
 import { resourcePacksRouter } from "./resource-packs/routes.js";
 import { chatRouter } from "./chat/routes.js";
+import { authRouter } from "./auth/routes.js";
 import { attachChatWebSocket } from "./chat/ws.js";
 import {
   startPublicTunnel,
@@ -44,6 +45,7 @@ app.use("/api/minecraft-bot", minecraftBotRouter);
 app.use("/api/news", newsRouter);
 app.use("/api/resource-packs", resourcePacksRouter);
 app.use("/api/chat", chatRouter);
+app.use("/auth", authRouter);
 
 app.get("/api/health", (_req, res) => {
   res.json({

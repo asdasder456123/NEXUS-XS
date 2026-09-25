@@ -71,10 +71,458 @@ const sections: Section[] = [
   },
 ];
 
+
+function LoginScreen({
+  onLogin,
+}: {
+  onLogin: () => void;
+}) {
+  const [mode, setMode] = useState<
+    "login" | "discord" | "account"
+  >("login");
+
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [code, setCode] = useState("");
+  const [challenge, setChallenge] = useState("");
+  const [discordLinked, setDiscordLinked] = useState(false);
+  const [status, setStatus] = useState("");
+
+  useEffect(() => {
+    const params = new URLSearchParams(
+      window.location.search,
+    );
+
+    const authChallenge =
+      params.get("auth_challenge");
+
+    const authError =
+      params.get("auth_error");
+
+    if (authChallenge) {
+      setChallenge(authChallenge);
+      setMode("discord");
+      setStatus(
+        "تم تسجيل Google. افتح Discord واستخدم أمر التحقق الظاهر بالأسفل.",
+      );
+
+      window.history.replaceState(
+        {},
+        "",
+        window.location.pathname,
+      );
+    }
+
+    if (authError) {
+      setStatus(
+        "حدث خطأ أثناء تسجيل الدخول باستخدام Google.",
+      );
+
+      window.history.replaceState(
+        {},
+        "",
+        window.location.pathname,
+      );
+    }
+  }, []);
+
+  useEffect(() => {
+    if (mode !== "discord" || !challenge) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const checkStatus = async () => {
+      try {
+        const response = await fetch(
+          `/auth/discord/status?challenge=${encodeURIComponent(
+            challenge,
+          )}`,
+        );
+
+        if (!response.ok) return;
+
+        const data = await response.json();
+
+        if (!cancelled && data.discordLinked) {
+          setDiscordLinked(true);
+          setStatus(
+            "تم ربط Discord. افتح رسائل Discord وخذ الكود المكوّن من 6 أرقام.",
+          );
+        }
+      } catch {
+        // Polling failure is temporary.
+      }
+    };
+
+    void checkStatus();
+
+    const timer = window.setInterval(
+      checkStatus,
+      2500,
+    );
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [mode, challenge]);
+
+  async function login() {
+    setStatus("جاري تسجيل الدخول...");
+
+    try {
+      const response = await fetch(
+        "/auth/login",
+        {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            username,
+            password,
+          }),
+        },
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setStatus(
+          data.error ??
+            "اسم المستخدم أو كلمة المرور غير صحيحة.",
+        );
+        return;
+      }
+
+      onLogin();
+    } catch {
+      setStatus("تعذر الاتصال بالسيرفر.");
+    }
+  }
+
+  async function verifyDiscord() {
+    if (!/^\d{6}$/.test(code)) {
+      setStatus(
+        "اكتب كود Discord المكوّن من 6 أرقام.",
+      );
+      return;
+    }
+
+    setStatus("جاري التحقق من Discord...");
+
+    try {
+      const response = await fetch(
+        "/auth/discord/verify",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            challenge,
+            code,
+          }),
+        },
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setStatus(
+          data.error ??
+            "فشل التحقق من Discord.",
+        );
+        return;
+      }
+
+      setMode("account");
+      setStatus(
+        "تم التحقق بنجاح. الآن أنشئ بيانات حساب NΞXUS XS.",
+      );
+    } catch {
+      setStatus("تعذر الاتصال بالسيرفر.");
+    }
+  }
+
+  async function createAccount() {
+    if (!username.trim()) {
+      setStatus("اكتب اسم المستخدم.");
+      return;
+    }
+
+    if (password.length < 8) {
+      setStatus(
+        "كلمة المرور يجب أن تكون 8 أحرف على الأقل.",
+      );
+      return;
+    }
+
+    setStatus("جاري إنشاء الحساب...");
+
+    try {
+      const response = await fetch(
+        "/auth/register",
+        {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            challenge,
+            username,
+            password,
+          }),
+        },
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setStatus(
+          data.error ??
+            "تعذر إنشاء الحساب.",
+        );
+        return;
+      }
+
+      onLogin();
+    } catch {
+      setStatus("تعذر الاتصال بالسيرفر.");
+    }
+  }
+
+  if (mode === "discord") {
+    return (
+      <main className="auth-screen">
+        <section className="auth-card">
+          <div className="auth-logo">
+            NΞXUS XS
+          </div>
+
+          <h1>Verify Discord</h1>
+
+          <p className="auth-subtitle">
+            تم تسجيل دخول Google بنجاح. أكمل
+            التحقق من Discord قبل إنشاء الحساب.
+          </p>
+
+          <div className="auth-code-box">
+            <strong>1</strong>
+            <span>
+              افتح Discord واستخدم:
+            </span>
+            <code>
+              !verify {challenge}
+            </code>
+          </div>
+
+          <div className="auth-code-box">
+            <strong>2</strong>
+            <span>
+              البوت سيرسل لك كودًا من 6 أرقام في DM.
+            </span>
+          </div>
+
+          <input
+            className="auth-input"
+            value={code}
+            onChange={(event) =>
+              setCode(
+                event.target.value
+                  .replace(/\D/g, "")
+                  .slice(0, 6),
+              )
+            }
+            placeholder="Discord verification code"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            maxLength={6}
+          />
+
+          <button
+            className="auth-submit"
+            onClick={verifyDiscord}
+            disabled={!discordLinked}
+          >
+            {discordLinked
+              ? "Verify Code"
+              : "Waiting for Discord..."}
+          </button>
+
+          {status && (
+            <p className="auth-status">
+              {status}
+            </p>
+          )}
+        </section>
+      </main>
+    );
+  }
+
+  if (mode === "account") {
+    return (
+      <main className="auth-screen">
+        <section className="auth-card">
+          <div className="auth-logo">
+            NΞXUS XS
+          </div>
+
+          <h1>Create Account</h1>
+
+          <p className="auth-subtitle">
+            Discord verified ✓
+            <br />
+            اختار اسم المستخدم وكلمة المرور.
+          </p>
+
+          <input
+            className="auth-input"
+            value={username}
+            onChange={(event) =>
+              setUsername(event.target.value)
+            }
+            placeholder="Username"
+            autoComplete="username"
+          />
+
+          <input
+            className="auth-input"
+            type="password"
+            value={password}
+            onChange={(event) =>
+              setPassword(event.target.value)
+            }
+            placeholder="Password"
+            autoComplete="new-password"
+          />
+
+          <button
+            className="auth-submit"
+            onClick={createAccount}
+          >
+            Enter NΞXUS XS
+          </button>
+
+          {status && (
+            <p className="auth-status">
+              {status}
+            </p>
+          )}
+        </section>
+      </main>
+    );
+  }
+
+  return (
+    <main className="auth-screen">
+      <section className="auth-card">
+        <div className="auth-logo">
+          NΞXUS XS
+        </div>
+
+        <h1>Welcome Back</h1>
+
+        <p className="auth-subtitle">
+          سجّل دخولك للوصول إلى NΞXUS XS.
+        </p>
+
+        <a
+          className="google-login"
+          href="/auth/google"
+        >
+          Continue with Google
+        </a>
+
+        <div className="auth-divider">
+          <span>أو</span>
+        </div>
+
+        <input
+          className="auth-input"
+          value={username}
+          onChange={(event) =>
+            setUsername(event.target.value)
+          }
+          placeholder="Username"
+          autoComplete="username"
+        />
+
+        <input
+          className="auth-input"
+          type="password"
+          value={password}
+          onChange={(event) =>
+            setPassword(event.target.value)
+          }
+          placeholder="Password"
+          autoComplete="current-password"
+        />
+
+        <button
+          className="auth-submit"
+          onClick={login}
+        >
+          Enter NΞXUS XS
+        </button>
+
+        {status && (
+          <p className="auth-status">
+            {status}
+          </p>
+        )}
+
+        <p className="auth-note">
+          الحسابات الجديدة تحتاج Google + Discord
+          verification.
+        </p>
+      </section>
+    </main>
+  );
+}
+
 function App() {
   const [active, setActive] = useState("Home");
   const [search, setSearch] = useState("");
   const [loginOpen, setLoginOpen] = useState(false);
+  const [authenticated, setAuthenticated] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    fetch("/auth/me", {
+      credentials: "include",
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          setAuthenticated(false);
+          return;
+        }
+
+        const data = await response.json();
+        setAuthenticated(Boolean(data?.user));
+      })
+      .catch(() => {
+        setAuthenticated(false);
+      });
+  }, []);
+
+  if (authenticated === null) {
+    return (
+      <main className="auth-screen">
+        <section className="auth-card">
+          <div className="auth-logo">NΞXUS XS</div>
+          <p className="auth-subtitle">Loading secure session...</p>
+        </section>
+      </main>
+    );
+  }
+
+  if (!authenticated) {
+    return <LoginScreen onLogin={() => setAuthenticated(true)} />;
+  }
 
   const current =
     sections.find((section) => section.name === active) ?? sections[0];
