@@ -22,10 +22,6 @@ import { resourcePacksRouter } from "./resource-packs/routes.js";
 import { chatRouter } from "./chat/routes.js";
 import { authRouter } from "./auth/routes.js";
 import { attachChatWebSocket } from "./chat/ws.js";
-import {
-  startPublicTunnel,
-  stopPublicTunnel,
-} from "./public-tunnel/index.js";
 
 const app = express();
 const port = Number(process.env.PORT ?? 3000);
@@ -105,12 +101,10 @@ server.listen(port, "127.0.0.1", () => {
 
 startDiscordNewsBot();
 
-void startPublicTunnel();
 
 function shutdown(signal: string) {
   console.log(`[NΞXUS XS] Received ${signal}. Shutting down...`);
 
-  stopPublicTunnel();
 
   server.close(() => {
     console.log("[NΞXUS XS] Server stopped.");
