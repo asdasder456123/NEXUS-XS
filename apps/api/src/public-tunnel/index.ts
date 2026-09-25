@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const WEB_URL = "http://127.0.0.1:3000";
+const PUBLIC_URL = "https://nexus-xs.devs.surf";
 
 const PUBLIC_URL_CHANNELS = [
   "1547158553490493500",
@@ -31,6 +32,10 @@ function getDiscordToken(): string | undefined {
   return process.env.DISCORD_BOT_TOKEN;
 }
 
+function getTunnelToken(): string | undefined {
+  return process.env.CLOUDFLARE_TUNNEL_TOKEN;
+}
+
 async function announcePublicUrl(url: string): Promise<void> {
   if (url === lastAnnouncedUrl) {
     return;
@@ -50,7 +55,7 @@ async function announcePublicUrl(url: string): Promise<void> {
     "",
     `🔗 ${url}`,
     "",
-    "يمكن الدخول إلى الشبكة من الرابط المؤقت الحالي.",
+    "الرابط الثابت الرسمي لـ NΞXUS XS.",
   ].join("\n");
 
   for (const channelId of PUBLIC_URL_CHANNELS) {
@@ -89,42 +94,34 @@ async function announcePublicUrl(url: string): Promise<void> {
   }
 }
 
-function handleOutput(chunk: Buffer): void {
-  const text = chunk.toString();
-
-  process.stdout.write(`[Cloudflare] ${text}`);
-
-  const matches = text.match(
-    /https:\/\/[a-z0-9-]+\.trycloudflare\.com/gi,
-  );
-
-  if (!matches) {
-    return;
-  }
-
-  for (const url of matches) {
-    void announcePublicUrl(url);
-  }
-}
-
 export async function startPublicTunnel(): Promise<void> {
   if (tunnelProcess) {
     console.log("[Tunnel] Already running.");
     return;
   }
 
-  console.log("[Tunnel] Starting Cloudflare Quick Tunnel...");
+  const tunnelToken = getTunnelToken();
+
+  if (!tunnelToken) {
+    console.error("[Tunnel] CLOUDFLARE_TUNNEL_TOKEN is missing.");
+    return;
+  }
+
+  console.log("[Tunnel] Starting Cloudflare Named Tunnel...");
+  console.log(`[Tunnel] Public URL: ${PUBLIC_URL}`);
 
   const cloudflaredPath = getCloudflaredPath();
 
   console.log(`[Tunnel] Using cloudflared: ${cloudflaredPath}`);
+  console.log(`[Tunnel] Origin: ${WEB_URL}`);
 
   const child = spawn(
     cloudflaredPath,
     [
       "tunnel",
-      "--url",
-      WEB_URL,
+      "run",
+      "--token",
+      tunnelToken,
     ],
     {
       stdio: ["ignore", "pipe", "pipe"],
@@ -133,8 +130,15 @@ export async function startPublicTunnel(): Promise<void> {
 
   tunnelProcess = child;
 
-  child.stdout?.on("data", handleOutput);
-  child.stderr?.on("data", handleOutput);
+  child.stdout?.on("data", (chunk: Buffer) => {
+    process.stdout.write(`[Cloudflare] ${chunk.toString()}`);
+  });
+
+  child.stderr?.on("data", (chunk: Buffer) => {
+    process.stdout.write(`[Cloudflare] ${chunk.toString()}`);
+  });
+
+  void announcePublicUrl(PUBLIC_URL);
 
   child.on("error", (error: Error) => {
     console.error("[Tunnel] Failed to start cloudflared:", error);
