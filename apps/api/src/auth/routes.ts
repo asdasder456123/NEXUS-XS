@@ -359,7 +359,17 @@ router.get("/discord/callback", async (req, res) => {
     );
 
     if (!tokenResponse.ok) {
-      throw new Error("Discord token exchange failed");
+      const errorText = await tokenResponse.text();
+
+      console.error(
+        "[Auth] Discord token exchange rejected:",
+        tokenResponse.status,
+        errorText,
+      );
+
+      throw new Error(
+        `Discord token exchange failed (${tokenResponse.status})`,
+      );
     }
 
     const tokens = (await tokenResponse.json()) as {
