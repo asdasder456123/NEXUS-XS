@@ -558,9 +558,7 @@ function App() {
     return (
       <LoginScreen
         onLogin={() => {
-          setActive("Home");
-          setSearch("");
-          setAuthenticated(true);
+          window.location.assign("/");
         }}
       />
     );
