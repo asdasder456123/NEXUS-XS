@@ -593,6 +593,18 @@ function App() {
       });
   }, []);
 
+  const results = useMemo(() => {
+    const query = search.trim().toLowerCase();
+
+    if (!query) return sections;
+
+    return sections.filter(
+      (section) =>
+        section.name.toLowerCase().includes(query) ||
+        section.description.toLowerCase().includes(query),
+    );
+  }, [search]);
+
   if (authenticated === null) {
     return (
       <main className="auth-screen">
@@ -617,17 +629,7 @@ function App() {
   const current =
     sections.find((section) => section.name === active) ?? sections[0];
 
-  const results = useMemo(() => {
-    const query = search.trim().toLowerCase();
 
-    if (!query) return sections;
-
-    return sections.filter(
-      (section) =>
-        section.name.toLowerCase().includes(query) ||
-        section.description.toLowerCase().includes(query),
-    );
-  }, [search]);
 
   function navigate(name: string) {
     setActive(name);
