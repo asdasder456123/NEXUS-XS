@@ -555,7 +555,15 @@ function App() {
   }
 
   if (!authenticated) {
-    return <LoginScreen onLogin={() => setAuthenticated(true)} />;
+    return (
+      <LoginScreen
+        onLogin={() => {
+          setActive("Home");
+          setSearch("");
+          setAuthenticated(true);
+        }}
+      />
+    );
   }
 
   const current =
