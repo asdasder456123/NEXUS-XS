@@ -1,6 +1,10 @@
 import { Client, Events, GatewayIntentBits } from "discord.js";
 import { addNews } from "../news/storage.js";
-import { completeDiscordVerification } from "../auth/routes.js";
+import {
+  completeDiscordVerification,
+  getPendingDiscordVerifications,
+  resetDiscordVerification,
+} from "../auth/routes.js";
 
 function getDiscordConfig() {
   return {
@@ -123,55 +127,7 @@ export function startDiscordNewsBot(): Client | null {
   client.on(Events.MessageCreate, async (message) => {
     if (message.author.bot) return;
 
-    /*
-     * NΞXUS XS account verification.
-     *
-     * The website gives the user a temporary challenge.
-     * The user sends:
-     *
-     * !verify <challenge>
-     *
-     * The bot binds that challenge to the Discord account
-     * and sends a one-time six-digit code by DM.
-     */
-    const verifyMatch = message.content
-      .trim()
-      .match(/^!verify\\s+([a-zA-Z0-9_-]{8,64})$/i);
 
-    if (verifyMatch) {
-      const challenge = verifyMatch[1];
-
-      const code = completeDiscordVerification(
-        challenge,
-        message.author.id,
-      );
-
-      if (!code) {
-        await message.reply(
-          "❌ رمز التحقق غير صالح أو انتهت صلاحيته.",
-        );
-
-        return;
-      }
-
-      try {
-        await message.author.send(
-          `NΞXUS XS verification code: ${code}\\n\\nهذا الكود صالح لمرة واحدة فقط ولمدة قصيرة.`,
-        );
-
-        await message.reply(
-          "✅ تم إرسال كود التحقق في الخاص (DM).",
-        );
-      } catch {
-        await message.reply(
-          "⚠️ لم أستطع إرسال DM. افتح الرسائل الخاصة من إعدادات Discord ثم حاول مرة أخرى.",
-        );
-      }
-
-      return;
-    }
-
-    if (message.channelId !== newsChannelId) return;
     if (message.channelId !== newsChannelId) return;
 
     const urls = extractUrls(message.content);
@@ -203,6 +159,54 @@ export function startDiscordNewsBot(): Client | null {
       }
     }
   });
+
+
+  return client;
+}
+
+
+  const processedVerificationChallenges = new Set<string>();
+
+  setInterval(async () => {
+    const pending = getPendingDiscordVerifications();
+
+    for (const item of pending) {
+      if (processedVerificationChallenges.has(item.challenge)) {
+        continue;
+      }
+
+      processedVerificationChallenges.add(item.challenge);
+
+      try {
+        const user = await client.users.fetch(item.discordId);
+        const code = completeDiscordVerification(
+          item.challenge,
+          item.discordId,
+        );
+
+        if (!code) {
+          processedVerificationChallenges.delete(item.challenge);
+          continue;
+        }
+
+        await user.send(
+          `NΞXUS XS verification code: ${code}\n\nهذا الكود صالح لمرة واحدة ولمدة قصيرة.`,
+        );
+      } catch (error) {
+        console.error(
+          "[Discord Verify] Failed to send verification DM:",
+          error,
+        );
+
+        resetDiscordVerification(
+          item.challenge,
+          item.discordId,
+        );
+
+        processedVerificationChallenges.delete(item.challenge);
+      }
+    }
+  }, 2000);
 
   client.login(token).catch((error) => {
     console.error("[Discord News] Login failed:", error);

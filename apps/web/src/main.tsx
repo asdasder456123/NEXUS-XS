@@ -81,19 +81,160 @@ function LoginScreen({
   const [password, setPassword] = useState("");
   const [status, setStatus] = useState("");
 
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const authError = params.get("auth_error");
+  const [discordStep, setDiscordStep] = useState<
+    "idle" | "details" | "waiting" | "code" | "account"
+  >("idle");
 
-    if (authError) {
-      setStatus("حدث خطأ أثناء تسجيل الدخول باستخدام Discord.");
-      window.history.replaceState(
-        {},
-        "",
-        window.location.pathname,
-      );
+  const [discordUsername, setDiscordUsername] = useState("");
+  const [discordId, setDiscordId] = useState("");
+  const [discordChallenge, setDiscordChallenge] = useState("");
+  const [discordCode, setDiscordCode] = useState("");
+  const [accountUsername, setAccountUsername] = useState("");
+  const [accountPassword, setAccountPassword] = useState("");
+  const [accountConfirm, setAccountConfirm] = useState("");
+  const [discordError, setDiscordError] = useState("");
+  const [discordLoading, setDiscordLoading] = useState(false);
+
+  useEffect(() => {
+    if (discordStep !== "waiting" || !discordChallenge) {
+      return;
     }
-  }, []);
+
+    const timer = window.setInterval(async () => {
+      try {
+        const response = await fetch(
+          `/auth/discord/status?challenge=${encodeURIComponent(
+            discordChallenge,
+          )}`,
+          {
+            credentials: "include",
+          },
+        );
+
+        if (!response.ok) {
+          return;
+        }
+
+        const data = await response.json();
+
+        if (data.codeSent) {
+          setDiscordStep("code");
+          setDiscordError("");
+        }
+      } catch {
+        // Keep polling while the verification is active.
+      }
+    }, 2000);
+
+    return () => window.clearInterval(timer);
+  }, [discordStep, discordChallenge]);
+
+  async function startDiscordVerification() {
+    setDiscordError("");
+    setDiscordLoading(true);
+
+    try {
+      const response = await fetch("/auth/discord/start", {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          discordUsername,
+          discordId,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setDiscordError(
+          data.error ?? "تعذر بدء التحقق من Discord.",
+        );
+        return;
+      }
+
+      setDiscordChallenge(data.challenge);
+      setDiscordStep("waiting");
+    } catch {
+      setDiscordError("تعذر الاتصال بالسيرفر.");
+    } finally {
+      setDiscordLoading(false);
+    }
+  }
+
+  async function verifyDiscordCode() {
+    setDiscordError("");
+    setDiscordLoading(true);
+
+    try {
+      const response = await fetch("/auth/discord/verify", {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          challenge: discordChallenge,
+          code: discordCode,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setDiscordError(
+          data.error ?? "كود التحقق غير صحيح.",
+        );
+        return;
+      }
+
+      if (data.verified) {
+        setDiscordStep("account");
+      }
+    } catch {
+      setDiscordError("تعذر الاتصال بالسيرفر.");
+    } finally {
+      setDiscordLoading(false);
+    }
+  }
+
+  async function createDiscordAccount() {
+    setDiscordError("");
+    setDiscordLoading(true);
+
+    try {
+      const response = await fetch("/auth/register", {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          challenge: discordChallenge,
+          username: accountUsername,
+          password: accountPassword,
+          confirmPassword: accountConfirm,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setDiscordError(
+          data.error ?? "تعذر إنشاء الحساب.",
+        );
+        return;
+      }
+
+      onLogin();
+    } catch {
+      setDiscordError("تعذر الاتصال بالسيرفر.");
+    } finally {
+      setDiscordLoading(false);
+    }
+  }
 
   async function login() {
     setStatus("جاري تسجيل الدخول...");
@@ -141,44 +282,220 @@ function LoginScreen({
           NΞXUS XS.
         </p>
 
-        <a
-          className="discord-login"
-          href="/auth/discord"
-        >
-          Continue with Discord
-        </a>
+        {discordStep === "idle" && (
+          <>
+            <button
+              type="button"
+              className="discord-login"
+              onClick={() => {
+                setDiscordError("");
+                setDiscordStep("details");
+              }}
+            >
+              Continue with Discord
+            </button>
 
-        <div className="auth-divider">
-          <span>أو</span>
-        </div>
+            <div className="auth-divider">
+              <span>أو</span>
+            </div>
 
-        <input
-          className="auth-input"
-          value={username}
-          onChange={(event) =>
-            setUsername(event.target.value)
-          }
-          placeholder="Username"
-          autoComplete="username"
-        />
+            <input
+              className="auth-input"
+              value={username}
+              onChange={(event) =>
+                setUsername(event.target.value)
+              }
+              placeholder="Username"
+              autoComplete="username"
+            />
 
-        <input
-          className="auth-input"
-          type="password"
-          value={password}
-          onChange={(event) =>
-            setPassword(event.target.value)
-          }
-          placeholder="Password"
-          autoComplete="current-password"
-        />
+            <input
+              className="auth-input"
+              type="password"
+              value={password}
+              onChange={(event) =>
+                setPassword(event.target.value)
+              }
+              placeholder="Password"
+              autoComplete="current-password"
+            />
 
-        <button
-          className="auth-submit"
-          onClick={login}
-        >
-          Enter NΞXUS XS
-        </button>
+            <button
+              className="auth-submit"
+              onClick={login}
+            >
+              Enter NΞXUS XS
+            </button>
+          </>
+        )}
+
+        {discordStep === "details" && (
+          <div className="discord-flow">
+            <h2>Discord Verification</h2>
+
+            <p>
+              اكتب اسم حساب Discord والـID الخاص بحسابك.
+              البوت هيبعت كود التحقق تلقائيًا للحساب.
+            </p>
+
+            <input
+              className="auth-input"
+              value={discordUsername}
+              onChange={(event) =>
+                setDiscordUsername(event.target.value)
+              }
+              placeholder="Discord Username"
+              autoComplete="off"
+            />
+
+            <input
+              className="auth-input"
+              value={discordId}
+              onChange={(event) =>
+                setDiscordId(event.target.value)
+              }
+              placeholder="Discord ID"
+              inputMode="numeric"
+              autoComplete="off"
+            />
+
+            <button
+              className="auth-submit"
+              onClick={startDiscordVerification}
+              disabled={discordLoading}
+            >
+              {discordLoading
+                ? "جاري التحقق..."
+                : "Continue"}
+            </button>
+
+            <button
+              type="button"
+              className="discord-flow-back"
+              onClick={() => setDiscordStep("idle")}
+            >
+              رجوع
+            </button>
+          </div>
+        )}
+
+        {discordStep === "waiting" && (
+          <div className="discord-flow">
+            <h2>Check your Discord</h2>
+
+            <p>
+              البوت بيبعت دلوقتي كود التحقق تلقائيًا
+              لحساب Discord المرتبط بالـID اللي أدخلته.
+            </p>
+
+            <div className="discord-loading">
+              انتظار كود التحقق...
+            </div>
+
+            <button
+              type="button"
+              className="discord-flow-back"
+              onClick={() => setDiscordStep("idle")}
+            >
+              إلغاء
+            </button>
+          </div>
+        )}
+
+        {discordStep === "code" && (
+          <div className="discord-flow">
+            <h2>Enter verification code</h2>
+
+            <p>
+              اكتب كود الـ4 أرقام اللي وصلك في رسالة
+              Discord.
+            </p>
+
+            <input
+              className="auth-input discord-code-input"
+              value={discordCode}
+              onChange={(event) =>
+                setDiscordCode(
+                  event.target.value
+                    .replace(/\D/g, "")
+                    .slice(0, 4),
+                )
+              }
+              placeholder="0000"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              maxLength={4}
+            />
+
+            <button
+              className="auth-submit"
+              onClick={verifyDiscordCode}
+              disabled={discordLoading || discordCode.length !== 4}
+            >
+              {discordLoading
+                ? "جاري التحقق..."
+                : "Verify Code"}
+            </button>
+          </div>
+        )}
+
+        {discordStep === "account" && (
+          <div className="discord-flow">
+            <h2>Create your account</h2>
+
+            <p>
+              تم التحقق من حساب Discord بنجاح. اختار
+              بيانات حساب NΞXUS XS.
+            </p>
+
+            <input
+              className="auth-input"
+              value={accountUsername}
+              onChange={(event) =>
+                setAccountUsername(event.target.value)
+              }
+              placeholder="NΞXUS XS Username"
+              autoComplete="username"
+            />
+
+            <input
+              className="auth-input"
+              type="password"
+              value={accountPassword}
+              onChange={(event) =>
+                setAccountPassword(event.target.value)
+              }
+              placeholder="Password"
+              autoComplete="new-password"
+            />
+
+            <input
+              className="auth-input"
+              type="password"
+              value={accountConfirm}
+              onChange={(event) =>
+                setAccountConfirm(event.target.value)
+              }
+              placeholder="Confirm Password"
+              autoComplete="new-password"
+            />
+
+            <button
+              className="auth-submit"
+              onClick={createDiscordAccount}
+              disabled={discordLoading}
+            >
+              {discordLoading
+                ? "جاري إنشاء الحساب..."
+                : "Create Account"}
+            </button>
+
+            <p className="auth-note">
+              احتفظ باسم المستخدم وكلمة المرور في مكان
+              آمن لاستخدامهما عند تسجيل الدخول لاحقًا.
+            </p>
+          </div>
+        )}
 
         {status && (
           <p className="auth-status">
@@ -186,10 +503,18 @@ function LoginScreen({
           </p>
         )}
 
-        <p className="auth-note">
-          الحسابات الجديدة يمكنها البدء من خلال
-          Discord.
-        </p>
+        {discordError && (
+          <p className="auth-status">
+            {discordError}
+          </p>
+        )}
+
+        {discordStep === "idle" && (
+          <p className="auth-note">
+            الحسابات الجديدة يمكنها البدء من خلال
+            Discord.
+          </p>
+        )}
       </section>
     </main>
   );
@@ -198,7 +523,6 @@ function LoginScreen({
 function App() {
   const [active, setActive] = useState("Home");
   const [search, setSearch] = useState("");
-  const [loginOpen, setLoginOpen] = useState(false);
   const [authenticated, setAuthenticated] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -351,119 +675,6 @@ function App() {
         </main>
       </div>
 
-      {loginOpen && (
-        <div
-          className="modal-backdrop"
-          onClick={() => setLoginOpen(false)}
-        >
-          <div
-            className="modal"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <button
-              className="modal-close"
-              type="button"
-              onClick={() => setLoginOpen(false)}
-            >
-              ×
-            </button>
-
-            <div className="eyebrow">NΞXUS XS</div>
-
-            <h2>
-              {authMode === "login"
-                ? "تسجيل الدخول"
-                : "إنشاء حساب"}
-            </h2>
-
-            <p>
-              {authMode === "login"
-                ? "سجّل الدخول إلى حسابك في NΞXUS XS."
-                : "أنشئ حسابك الخاص داخل NΞXUS XS."}
-            </p>
-
-            <div className="auth-switch">
-              <button
-                type="button"
-                onClick={() => setAuthMode("login")}
-              >
-                تسجيل الدخول
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setAuthMode("register")}
-              >
-                إنشاء حساب
-              </button>
-            </div>
-
-            <div className="auth-form">
-              <label>
-                اسم المستخدم
-                <input
-                  type="text"
-                  value={authUsername}
-                  onChange={(event) =>
-                    setAuthUsername(event.target.value)
-                  }
-                  autoComplete="username"
-                />
-              </label>
-
-              <label>
-                كلمة المرور
-                <input
-                  type="password"
-                  value={authPassword}
-                  onChange={(event) =>
-                    setAuthPassword(event.target.value)
-                  }
-                  autoComplete={
-                    authMode === "login"
-                      ? "current-password"
-                      : "new-password"
-                  }
-                />
-              </label>
-
-              {authMode === "register" && (
-                <label>
-                  تأكيد كلمة المرور
-                  <input
-                    type="password"
-                    value={authConfirmPassword}
-                    onChange={(event) =>
-                      setAuthConfirmPassword(event.target.value)
-                    }
-                    autoComplete="new-password"
-                  />
-                </label>
-              )}
-
-              {authError && (
-                <div className="auth-error">
-                  {authError}
-                </div>
-              )}
-
-              <button
-                className="primary-button"
-                type="button"
-                onClick={() => void submitAuth()}
-                disabled={authLoading}
-              >
-                {authLoading
-                  ? "جاري التنفيذ..."
-                  : authMode === "login"
-                    ? "دخول"
-                    : "إنشاء الحساب"}
-              </button>
-            </div>
-
-          </div>
-        </div>
-      )}
     </div>
   );
 }

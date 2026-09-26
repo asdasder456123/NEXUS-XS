@@ -1,6 +1,7 @@
 import { Router } from "express";
 import {
   randomBytes,
+  randomInt,
   scrypt,
   timingSafeEqual,
 } from "node:crypto";
@@ -15,7 +16,6 @@ type User = {
   id: string;
   username: string;
   passwordHash?: string;
-  googleId?: string;
   discordId?: string;
   email: string;
   name: string;
@@ -30,23 +30,18 @@ type Session = {
 
 type VerificationChallenge = {
   challenge: string;
-  google: {
-    sub: string;
-    email: string;
-    name: string;
-    picture?: string;
-  };
+  discordId: string;
+  discordUsername: string;
   code?: string;
-  discordId?: string;
-  expiresAt: number;
+  codeSent: boolean;
   verified: boolean;
+  expiresAt: number;
 };
 
 const dataDirectory = path.resolve(process.cwd(), "data/auth");
 const usersFile = path.join(dataDirectory, "users.json");
 
 const sessions = new Map<string, Session>();
-const oauthStates = new Map<string, number>();
 const verificationChallenges = new Map<
   string,
   VerificationChallenge
@@ -193,26 +188,57 @@ export function completeDiscordVerification(
   challenge: string,
   discordId: string,
 ): string | null {
-  cleanupChallenges();
+  cleanupVerificationChallenges();
 
   const item = verificationChallenges.get(challenge);
-
   if (!item || item.expiresAt < Date.now()) {
     return null;
   }
 
-  if (item.discordId && item.discordId !== discordId) {
+  if (item.discordId !== discordId) {
     return null;
   }
 
-  const code = String(
-    Math.floor(100000 + Math.random() * 900000),
-  );
+  if (item.codeSent && item.code) {
+    return item.code;
+  }
 
-  item.discordId = discordId;
+  const code = String(randomInt(1000, 10000));
+
   item.code = code;
+  item.codeSent = true;
+  item.verified = false;
 
   return code;
+}
+
+export function getPendingDiscordVerifications(): Array<{
+  challenge: string;
+  discordId: string;
+}> {
+  cleanupVerificationChallenges();
+
+  return Array.from(verificationChallenges.values())
+    .filter((item) => !item.codeSent && !item.verified)
+    .map((item) => ({
+      challenge: item.challenge,
+      discordId: item.discordId,
+    }));
+}
+
+export function resetDiscordVerification(
+  challenge: string,
+  discordId: string,
+): void {
+  const item = verificationChallenges.get(challenge);
+
+  if (!item || item.discordId !== discordId) {
+    return;
+  }
+
+  item.code = undefined;
+  item.codeSent = false;
+  item.verified = false;
 }
 
 /*
@@ -275,260 +301,101 @@ router.post("/login", async (req, res) => {
 /*
  * Start Discord OAuth.
  */
-router.get("/discord", (_req, res) => {
-  const clientId = process.env.DISCORD_CLIENT_ID;
-  const redirectUri =
-    process.env.DISCORD_REDIRECT_URI ??
-    `${baseUrl()}/auth/discord/callback`;
+router.post("/discord/start", (req, res) => {
+  const discordUsername = String(req.body?.discordUsername ?? "").trim();
+  const discordId = String(req.body?.discordId ?? "").trim();
 
-  if (!clientId) {
-    res.status(503).send("Discord login is not configured yet.");
-    return;
-  }
-
-  const state = randomBytes(32).toString("base64url");
-
-  oauthStates.set(
-    state,
-    Date.now() + 10 * 60 * 1000,
-  );
-
-  const params = new URLSearchParams({
-    client_id: clientId,
-    redirect_uri: redirectUri,
-    response_type: "code",
-    scope: "identify email",
-    state,
-  });
-
-  res.redirect(
-    `https://discord.com/oauth2/authorize?${params.toString()}`,
-  );
-});
-
-/*
- * Discord OAuth callback.
- */
-router.get("/discord/callback", async (req, res) => {
-  const clientId = process.env.DISCORD_CLIENT_ID;
-  const clientSecret = process.env.DISCORD_CLIENT_SECRET;
-  const redirectUri =
-    process.env.DISCORD_REDIRECT_URI ??
-    `${baseUrl()}/auth/discord/callback`;
-
-  const code =
-    typeof req.query.code === "string"
-      ? req.query.code
-      : "";
-
-  const state =
-    typeof req.query.state === "string"
-      ? req.query.state
-      : "";
-
-  if (!clientId || !clientSecret || !code || !state) {
-    res.redirect("/?auth_error=discord");
-    return;
-  }
-
-  const stateExpiresAt = oauthStates.get(state);
-  oauthStates.delete(state);
-
-  if (!stateExpiresAt || stateExpiresAt < Date.now()) {
-    res.redirect("/?auth_error=discord_state");
-    return;
-  }
-
-  try {
-    const tokenResponse = await fetch(
-      "https://discord.com/api/oauth2/token",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type":
-            "application/x-www-form-urlencoded",
-        },
-        body: new URLSearchParams({
-          client_id: clientId,
-          client_secret: clientSecret,
-          grant_type: "authorization_code",
-          code,
-          redirect_uri: redirectUri,
-        }),
-      },
-    );
-
-    if (!tokenResponse.ok) {
-      const errorText = await tokenResponse.text();
-
-      console.error(
-        "[Auth] Discord token exchange rejected:",
-        tokenResponse.status,
-        errorText,
-      );
-
-      throw new Error(
-        `Discord token exchange failed (${tokenResponse.status})`,
-      );
-    }
-
-    const tokens = (await tokenResponse.json()) as {
-      access_token?: string;
-    };
-
-    if (!tokens.access_token) {
-      throw new Error("Discord access token missing");
-    }
-
-    const profileResponse = await fetch(
-      "https://discord.com/api/users/@me",
-      {
-        headers: {
-          Authorization:
-            `Bearer ${tokens.access_token}`,
-        },
-      },
-    );
-
-    if (!profileResponse.ok) {
-      throw new Error("Discord profile request failed");
-    }
-
-    const profile = (await profileResponse.json()) as {
-      id?: string;
-      username?: string;
-      global_name?: string;
-      email?: string;
-      avatar?: string;
-    };
-
-    if (!profile.id) {
-      throw new Error("Discord profile is incomplete");
-    }
-
-    cleanupChallenges();
-
-    const challenge = randomBytes(12).toString("hex");
-
-    const existingChallenge = verificationChallenges.get(challenge);
-
-    if (!existingChallenge) {
-      verificationChallenges.set(challenge, {
-        challenge,
-        google: {
-          sub: "",
-          email: profile.email ?? "",
-          name:
-            profile.global_name ??
-            profile.username ??
-            "Discord User",
-        },
-        discordId: profile.id,
-        expiresAt: Date.now() + 10 * 60 * 1000,
-        verified: true,
-      });
-    }
-
-    res.redirect(
-      `/?auth_challenge=${encodeURIComponent(challenge)}`,
-    );
-  } catch (error) {
-    console.error(
-      "[Auth] Discord login failed:",
-      error,
-    );
-
-    res.redirect("/?auth_error=discord");
-  }
-});
-
-/*
- * Discord verification status.
- */
-router.get("/discord/status", (req, res) => {
-  const challenge =
-    typeof req.query.challenge === "string"
-      ? req.query.challenge
-      : "";
-
-  cleanupChallenges();
-
-  const item = verificationChallenges.get(challenge);
-
-  if (!item) {
-    res.status(404).json({
-      ok: false,
-      error: "رمز التحقق غير صالح أو انتهت صلاحيته.",
+  if (discordUsername.length < 2 || discordUsername.length > 100) {
+    return res.status(400).json({
+      error: "Discord username must be between 2 and 100 characters.",
     });
-
-    return;
   }
 
-  res.json({
-    ok: true,
-    discordLinked: Boolean(item.discordId),
-    verified: item.verified,
-    expiresAt: item.expiresAt,
+  if (!/^\d{17,20}$/.test(discordId)) {
+    return res.status(400).json({
+      error: "Enter a valid Discord user ID.",
+    });
+  }
+
+  cleanupVerificationChallenges();
+
+  const challenge = randomBytes(16).toString("hex");
+  const expiresAt = Date.now() + 10 * 60 * 1000;
+
+  verificationChallenges.set(challenge, {
+    challenge,
+    discordId,
+    discordUsername,
+    codeSent: false,
+    verified: false,
+    expiresAt,
+  });
+
+  return res.json({
+    challenge,
+    expiresAt,
   });
 });
 
-/*
- * Verify the six-digit Discord code.
- */
-router.post("/discord/verify", (req, res) => {
-  const challenge = String(
-    req.body?.challenge ?? "",
-  ).trim();
-
-  const code = String(
-    req.body?.code ?? "",
-  ).trim();
-
-  cleanupChallenges();
+router.get("/discord/status", (req, res) => {
+  const challenge = String(req.query.challenge ?? "").trim();
 
   const item = verificationChallenges.get(challenge);
 
   if (!item || item.expiresAt < Date.now()) {
-    res.status(400).json({
-      ok: false,
-      error: "رمز التحقق انتهت صلاحيته.",
+    verificationChallenges.delete(challenge);
+    return res.status(404).json({
+      error: "Verification challenge expired or not found.",
     });
-
-    return;
   }
 
-  if (!item.discordId || !item.code) {
-    res.status(400).json({
-      ok: false,
-      error:
-        "لم يتم التحقق من Discord بعد. استخدم أمر verify في Discord.",
-    });
-
-    return;
-  }
-
-  if (item.code !== code) {
-    res.status(401).json({
-      ok: false,
-      error: "كود Discord غير صحيح.",
-    });
-
-    return;
-  }
-
-  item.verified = true;
-
-  res.json({
-    ok: true,
+  return res.json({
+    verified: item.verified,
+    codeSent: item.codeSent,
+    discordUsername: item.discordUsername,
+    expiresAt: item.expiresAt,
   });
 });
 
-/*
- * Create a new account.
- *
- * Direct registration is intentionally disabled.
- * A valid Discord-verified Google challenge is required.
- */
+router.post("/discord/verify", (req, res) => {
+  const challenge = String(req.body?.challenge ?? "").trim();
+  const code = String(req.body?.code ?? "").trim();
+
+  const item = verificationChallenges.get(challenge);
+
+  if (!item || item.expiresAt < Date.now()) {
+    verificationChallenges.delete(challenge);
+    return res.status(400).json({
+      error: "Verification challenge expired or not found.",
+    });
+  }
+
+  if (!item.codeSent || !item.code) {
+    return res.status(400).json({
+      error: "The Discord bot has not sent a verification code yet.",
+    });
+  }
+
+  if (!/^\d{4}$/.test(code)) {
+    return res.status(400).json({
+      error: "Enter the 4-digit verification code.",
+    });
+  }
+
+  if (code !== item.code) {
+    return res.status(400).json({
+      error: "Incorrect verification code.",
+    });
+  }
+
+  item.verified = true;
+  item.code = undefined;
+
+  return res.json({
+    verified: true,
+  });
+});
+
 router.post("/register", async (req, res) => {
   const challenge = String(
     req.body?.challenge ?? "",
@@ -542,7 +409,11 @@ router.post("/register", async (req, res) => {
     req.body?.password ?? "",
   );
 
-  cleanupChallenges();
+  const confirmPassword = String(
+    req.body?.confirmPassword ?? "",
+  );
+
+  cleanupVerificationChallenges();
 
   const verification =
     verificationChallenges.get(challenge);
@@ -550,13 +421,11 @@ router.post("/register", async (req, res) => {
   if (
     !verification ||
     !verification.verified ||
-    verification.expiresAt < Date.now() ||
-    !verification.discordId
+    verification.expiresAt < Date.now()
   ) {
     res.status(403).json({
       ok: false,
-      error:
-        "يجب إكمال التحقق من Google وDiscord أولًا.",
+      error: "يجب إكمال التحقق من Discord أولًا.",
     });
 
     return;
@@ -581,6 +450,15 @@ router.post("/register", async (req, res) => {
     return;
   }
 
+  if (password !== confirmPassword) {
+    res.status(400).json({
+      ok: false,
+      error: "كلمتا المرور غير متطابقتين.",
+    });
+
+    return;
+  }
+
   const users = await loadUsers();
 
   const usernameExists = users.some(
@@ -593,22 +471,6 @@ router.post("/register", async (req, res) => {
     res.status(409).json({
       ok: false,
       error: "اسم المستخدم مستخدم بالفعل.",
-    });
-
-    return;
-  }
-
-  const emailExists = users.some(
-    (user) =>
-      user.email.toLowerCase() ===
-      verification.google.email.toLowerCase(),
-  );
-
-  if (emailExists) {
-    res.status(409).json({
-      ok: false,
-      error:
-        "هذا حساب Google لديه حساب NΞXUS XS بالفعل.",
     });
 
     return;
@@ -633,13 +495,9 @@ router.post("/register", async (req, res) => {
     id: randomBytes(16).toString("hex"),
     username,
     passwordHash: await hashPassword(password),
-    googleId: verification.google.sub,
     discordId: verification.discordId,
-    email: verification.google.email,
-    name:
-      verification.google.name ||
-      username,
-    avatar: verification.google.picture,
+    email: undefined,
+    name: verification.discordUsername || username,
     createdAt: new Date().toISOString(),
   };
 
@@ -674,229 +532,5 @@ router.post("/logout", (req, res) => {
 
   res.json({ ok: true });
 });
-
-/*
- * Google OAuth configuration.
- */
-function googleConfig() {
-  const clientId = process.env.GOOGLE_CLIENT_ID;
-  const clientSecret =
-    process.env.GOOGLE_CLIENT_SECRET;
-
-  const redirectUri =
-    process.env.GOOGLE_REDIRECT_URI ??
-    `${baseUrl()}/auth/google/callback`;
-
-  if (!clientId || !clientSecret) {
-    return null;
-  }
-
-  return {
-    clientId,
-    clientSecret,
-    redirectUri,
-  };
-}
-
-/*
- * Start Google login.
- */
-router.get("/google", (_req, res) => {
-  const config = googleConfig();
-
-  if (!config) {
-    res
-      .status(503)
-      .send("Google login is not configured yet.");
-
-    return;
-  }
-
-  const state = randomBytes(32).toString(
-    "base64url",
-  );
-
-  oauthStates.set(
-    state,
-    Date.now() + 10 * 60 * 1000,
-  );
-
-  const params = new URLSearchParams({
-    client_id: config.clientId,
-    redirect_uri: config.redirectUri,
-    response_type: "code",
-    scope: "openid email profile",
-    state,
-  });
-
-  res.redirect(
-    `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`,
-  );
-});
-
-/*
- * Google callback.
- */
-router.get(
-  "/google/callback",
-  async (req, res) => {
-    const config = googleConfig();
-
-    const code =
-      typeof req.query.code === "string"
-        ? req.query.code
-        : "";
-
-    const state =
-      typeof req.query.state === "string"
-        ? req.query.state
-        : "";
-
-    if (!config || !code || !state) {
-      res.redirect("/?auth_error=google");
-      return;
-    }
-
-    const stateExpiresAt =
-      oauthStates.get(state);
-
-    oauthStates.delete(state);
-
-    if (
-      !stateExpiresAt ||
-      stateExpiresAt < Date.now()
-    ) {
-      res.redirect("/?auth_error=state");
-      return;
-    }
-
-    try {
-      const tokenResponse = await fetch(
-        "https://oauth2.googleapis.com/token",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type":
-              "application/x-www-form-urlencoded",
-          },
-          body: new URLSearchParams({
-            code,
-            client_id: config.clientId,
-            client_secret:
-              config.clientSecret,
-            redirect_uri:
-              config.redirectUri,
-            grant_type:
-              "authorization_code",
-          }),
-        },
-      );
-
-      if (!tokenResponse.ok) {
-        throw new Error(
-          "Google token exchange failed",
-        );
-      }
-
-      const tokens =
-        (await tokenResponse.json()) as {
-          access_token?: string;
-        };
-
-      if (!tokens.access_token) {
-        throw new Error(
-          "Google access token missing",
-        );
-      }
-
-      const profileResponse = await fetch(
-        "https://www.googleapis.com/oauth2/v3/userinfo",
-        {
-          headers: {
-            Authorization:
-              `Bearer ${tokens.access_token}`,
-          },
-        },
-      );
-
-      if (!profileResponse.ok) {
-        throw new Error(
-          "Google profile request failed",
-        );
-      }
-
-      const profile =
-        (await profileResponse.json()) as {
-          sub?: string;
-          email?: string;
-          name?: string;
-          picture?: string;
-        };
-
-      if (!profile.sub || !profile.email) {
-        throw new Error(
-          "Google profile is incomplete",
-        );
-      }
-
-      const users = await loadUsers();
-
-      const existingUser =
-        users.find(
-          (item) =>
-            item.googleId === profile.sub,
-        ) ??
-        users.find(
-          (item) =>
-            item.email.toLowerCase() ===
-            profile.email!.toLowerCase(),
-        );
-
-      /*
-       * Existing accounts can continue using
-       * username/password. Google does not silently
-       * create another account for them.
-       */
-      if (existingUser) {
-        createSession(res, existingUser.id);
-        res.redirect("/");
-        return;
-      }
-
-      cleanupChallenges();
-
-      const challenge = randomBytes(12).toString(
-        "hex",
-      );
-
-      verificationChallenges.set(challenge, {
-        challenge,
-        google: {
-          sub: profile.sub,
-          email: profile.email,
-          name: profile.name ?? "",
-          picture: profile.picture,
-        },
-        expiresAt: Date.now() + 10 * 60 * 1000,
-        verified: false,
-      });
-
-      res.redirect(
-        `/?auth_challenge=${encodeURIComponent(
-          challenge,
-        )}`,
-      );
-    } catch (error) {
-      console.error(
-        "[Auth] Google login failed:",
-        error,
-      );
-
-      res.redirect(
-        "/?auth_error=google",
-      );
-    }
-  },
-);
 
 export { router as authRouter };
