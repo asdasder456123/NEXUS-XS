@@ -520,6 +520,56 @@ function LoginScreen({
   );
 }
 
+class AppErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { error: Error | null }
+> {
+  state = { error: null as Error | null };
+
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    console.error("[NEXUS XS Runtime Error]", error, info);
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <main
+          style={{
+            minHeight: "100vh",
+            padding: "32px",
+            background: "#050505",
+            color: "#fff",
+            fontFamily: "system-ui, sans-serif",
+          }}
+        >
+          <h1>NΞXUS XS — Runtime Error</h1>
+          <p>الواجهة حصل فيها خطأ أثناء التشغيل:</p>
+          <pre
+            style={{
+              whiteSpace: "pre-wrap",
+              padding: "16px",
+              borderRadius: "12px",
+              background: "#151515",
+              color: "#ff8080",
+              overflowX: "auto",
+            }}
+          >
+            {this.state.error.message}
+            {"\n\n"}
+            {this.state.error.stack}
+          </pre>
+        </main>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
 function App() {
   const [active, setActive] = useState("Home");
   const [search, setSearch] = useState("");
@@ -2697,4 +2747,8 @@ type DotFileEntry = {
 };
 
 
-createRoot(document.getElementById("root")!).render(<App />);
+createRoot(document.getElementById("root")!).render(
+  <AppErrorBoundary>
+    <App />
+  </AppErrorBoundary>,
+);
