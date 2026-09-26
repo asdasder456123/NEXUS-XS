@@ -17,7 +17,7 @@ type User = {
   username: string;
   passwordHash?: string;
   discordId?: string;
-  email: string;
+  email?: string;
   name: string;
   avatar?: string;
   createdAt: string;
@@ -182,6 +182,16 @@ export function getVerificationChallenge(
 ) {
   cleanupChallenges();
   return verificationChallenges.get(challenge);
+}
+
+function cleanupVerificationChallenges(): void {
+  const now = Date.now();
+
+  for (const [challenge, item] of verificationChallenges) {
+    if (item.expiresAt < now) {
+      verificationChallenges.delete(challenge);
+    }
+  }
 }
 
 export function completeDiscordVerification(
