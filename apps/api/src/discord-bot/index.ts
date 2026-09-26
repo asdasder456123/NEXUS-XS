@@ -126,15 +126,11 @@ export function startDiscordNewsBot(): Client | null {
 
   client.on(Events.MessageCreate, async (message) => {
     if (message.author.bot) return;
-
-
     if (message.channelId !== newsChannelId) return;
 
     const urls = extractUrls(message.content);
 
-    if (!urls.length) {
-      return;
-    }
+    if (!urls.length) return;
 
     for (const url of urls) {
       try {
@@ -151,7 +147,6 @@ export function startDiscordNewsBot(): Client | null {
         });
 
         await message.react("📰");
-
         console.log(`[Discord News] Saved: ${url}`);
       } catch (error) {
         console.error(`[Discord News] Failed: ${url}`, error);
@@ -160,20 +155,13 @@ export function startDiscordNewsBot(): Client | null {
     }
   });
 
-
-  return client;
-}
-
-
   const processedVerificationChallenges = new Set<string>();
 
   setInterval(async () => {
     const pending = getPendingDiscordVerifications();
 
     for (const item of pending) {
-      if (processedVerificationChallenges.has(item.challenge)) {
-        continue;
-      }
+      if (processedVerificationChallenges.has(item.challenge)) continue;
 
       processedVerificationChallenges.add(item.challenge);
 
