@@ -273,6 +273,166 @@ router.post("/login", async (req, res) => {
 });
 
 /*
+ * Start Discord OAuth.
+ */
+router.get("/discord", (_req, res) => {
+  const clientId = process.env.DISCORD_CLIENT_ID;
+  const redirectUri =
+    process.env.DISCORD_REDIRECT_URI ??
+    `${baseUrl()}/auth/discord/callback`;
+
+  if (!clientId) {
+    res.status(503).send("Discord login is not configured yet.");
+    return;
+  }
+
+  const state = randomBytes(32).toString("base64url");
+
+  oauthStates.set(
+    state,
+    Date.now() + 10 * 60 * 1000,
+  );
+
+  const params = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    response_type: "code",
+    scope: "identify email",
+    state,
+  });
+
+  res.redirect(
+    `https://discord.com/oauth2/authorize?${params.toString()}`,
+  );
+});
+
+/*
+ * Discord OAuth callback.
+ */
+router.get("/discord/callback", async (req, res) => {
+  const clientId = process.env.DISCORD_CLIENT_ID;
+  const clientSecret = process.env.DISCORD_CLIENT_SECRET;
+  const redirectUri =
+    process.env.DISCORD_REDIRECT_URI ??
+    `${baseUrl()}/auth/discord/callback`;
+
+  const code =
+    typeof req.query.code === "string"
+      ? req.query.code
+      : "";
+
+  const state =
+    typeof req.query.state === "string"
+      ? req.query.state
+      : "";
+
+  if (!clientId || !clientSecret || !code || !state) {
+    res.redirect("/?auth_error=discord");
+    return;
+  }
+
+  const stateExpiresAt = oauthStates.get(state);
+  oauthStates.delete(state);
+
+  if (!stateExpiresAt || stateExpiresAt < Date.now()) {
+    res.redirect("/?auth_error=discord_state");
+    return;
+  }
+
+  try {
+    const tokenResponse = await fetch(
+      "https://discord.com/api/oauth2/token",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type":
+            "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({
+          client_id: clientId,
+          client_secret: clientSecret,
+          grant_type: "authorization_code",
+          code,
+          redirect_uri: redirectUri,
+        }),
+      },
+    );
+
+    if (!tokenResponse.ok) {
+      throw new Error("Discord token exchange failed");
+    }
+
+    const tokens = (await tokenResponse.json()) as {
+      access_token?: string;
+    };
+
+    if (!tokens.access_token) {
+      throw new Error("Discord access token missing");
+    }
+
+    const profileResponse = await fetch(
+      "https://discord.com/api/users/@me",
+      {
+        headers: {
+          Authorization:
+            `Bearer ${tokens.access_token}`,
+        },
+      },
+    );
+
+    if (!profileResponse.ok) {
+      throw new Error("Discord profile request failed");
+    }
+
+    const profile = (await profileResponse.json()) as {
+      id?: string;
+      username?: string;
+      global_name?: string;
+      email?: string;
+      avatar?: string;
+    };
+
+    if (!profile.id) {
+      throw new Error("Discord profile is incomplete");
+    }
+
+    cleanupChallenges();
+
+    const challenge = randomBytes(12).toString("hex");
+
+    const existingChallenge = verificationChallenges.get(challenge);
+
+    if (!existingChallenge) {
+      verificationChallenges.set(challenge, {
+        challenge,
+        google: {
+          sub: "",
+          email: profile.email ?? "",
+          name:
+            profile.global_name ??
+            profile.username ??
+            "Discord User",
+        },
+        discordId: profile.id,
+        expiresAt: Date.now() + 10 * 60 * 1000,
+        verified: true,
+      });
+    }
+
+    res.redirect(
+      `/?auth_challenge=${encodeURIComponent(challenge)}`,
+    );
+  } catch (error) {
+    console.error(
+      "[Auth] Discord login failed:",
+      error,
+    );
+
+    res.redirect("/?auth_error=discord");
+  }
+});
+
+/*
  * Discord verification status.
  */
 router.get("/discord/status", (req, res) => {
