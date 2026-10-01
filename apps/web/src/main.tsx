@@ -664,7 +664,7 @@ function App() {
         
         
 
-        <button className="discord-button" type="button">
+        <button className="discord-button" type="button" onClick={() => window.open("https://discord.gg/d98ZWeXC6e", "_blank", "noopener,noreferrer")}>
           Discord <span>↗</span>
         </button>
 </header>
@@ -1374,7 +1374,23 @@ function ServicePage({ section }: { section: Section }) {
   }
 
   if (section.name === "Minecraft Bot") {
-    return <MinecraftBotWorkspace />;
+    return (
+      <section className="service-page">
+        <div
+          style={{
+            background: "#dc2626",
+            color: "#fff",
+            padding: "18px 20px",
+            borderRadius: "12px",
+            textAlign: "center",
+            fontWeight: 700,
+            fontSize: "16px",
+          }}
+        >
+          بتم التصليح والمعالجة، يرجى المحاولة بعد قليل.
+        </div>
+      </section>
+    );
   }
 
   if (section.name === "Resource Packs") {
