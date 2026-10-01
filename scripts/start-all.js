@@ -49,45 +49,6 @@ start(
 
 console.log("[NEXUS-XS] Unified runtime is alive.");
 
-const https = require("node:https");
-const fs = require("node:fs");
-
-const cloudflaredPath = "/tmp/cloudflared";
-
-async function installCloudflared() {
-  const response = await fetch(
-    "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64",
-    { redirect: "follow" }
-  );
-
-  if (!response.ok) {
-    throw new Error(`Download failed: HTTP ${response.status}`);
-  }
-
-  const data = Buffer.from(await response.arrayBuffer());
-  fs.writeFileSync(cloudflaredPath, data);
-  fs.chmodSync(cloudflaredPath, 0o755);
-}
-
-(async () => {
-  try {
-    if (!fs.existsSync(cloudflaredPath)) {
-      console.log("[QuickTunnel] Installing cloudflared...");
-      await installCloudflared();
-      console.log("[QuickTunnel] cloudflared installed.");
-    }
-
-    start(
-      "QuickTunnel",
-      cloudflaredPath,
-      ["tunnel", "--no-autoupdate", "--url", "http://127.0.0.1:3000"],
-      process.cwd()
-    );
-  } catch (error) {
-    console.error("[QuickTunnel] Failed to install/start cloudflared:", error);
-  }
-})();
-
 function shutdown(signal) {
   console.log(`[NEXUS-XS] Received ${signal}, stopping children...`);
 
