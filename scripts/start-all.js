@@ -54,6 +54,13 @@ start(
 
 console.log("[NEXUS-XS] Unified runtime is alive.");
 
+start(
+  "QuickTunnel",
+  "cloudflared",
+  ["tunnel", "--no-autoupdate", "--url", "http://127.0.0.1:3000"],
+  process.cwd()
+);
+
 function shutdown(signal) {
   console.log(`[NEXUS-XS] Received ${signal}, stopping children...`);
 
