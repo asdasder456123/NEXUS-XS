@@ -44,8 +44,32 @@ start(
   process.cwd()
 );
 
+console.log("[NEXUS-XS] Checking cloudflared...");
 
+const cloudflaredCheck = spawn("cloudflared", ["--version"], {
+  env: process.env,
+  stdio: ["ignore", "pipe", "pipe"],
+});
 
+cloudflaredCheck.stdout.on("data", (data) => {
+  process.stdout.write(`[QuickTunnel] ${data}`);
+});
+
+cloudflaredCheck.stderr.on("data", (data) => {
+  process.stderr.write(`[QuickTunnel] ${data}`);
+});
+
+cloudflaredCheck.on("error", () => {
+  console.error("[QuickTunnel] cloudflared is NOT installed.");
+});
+
+cloudflaredCheck.on("exit", (code) => {
+  if (code === 0) {
+    console.log("[QuickTunnel] cloudflared is available.");
+  } else {
+    console.error(`[QuickTunnel] cloudflared check failed: ${code}`);
+  }
+});
 
 console.log("[NEXUS-XS] Unified runtime is alive.");
 
