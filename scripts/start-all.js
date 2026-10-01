@@ -54,37 +54,19 @@ const fs = require("node:fs");
 
 const cloudflaredPath = "/tmp/cloudflared";
 
-function installCloudflared() {
-  return new Promise((resolve, reject) => {
-    const file = fs.createWriteStream(cloudflaredPath);
+async function installCloudflared() {
+  const response = await fetch(
+    "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64",
+    { redirect: "follow" }
+  );
 
-    const request = https.get(
-      "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64",
-      (response) => {
-        if (response.statusCode !== 200) {
-          file.close();
-          fs.unlinkSync(cloudflaredPath);
-          reject(new Error(`Download failed: HTTP ${response.statusCode}`));
-          return;
-        }
+  if (!response.ok) {
+    throw new Error(`Download failed: HTTP ${response.status}`);
+  }
 
-        response.pipe(file);
-
-        file.on("finish", () => {
-          file.close(() => {
-            fs.chmodSync(cloudflaredPath, 0o755);
-            resolve();
-          });
-        });
-      }
-    );
-
-    request.on("error", (error) => {
-      file.close();
-      try { fs.unlinkSync(cloudflaredPath); } catch {}
-      reject(error);
-    });
-  });
+  const data = Buffer.from(await response.arrayBuffer());
+  fs.writeFileSync(cloudflaredPath, data);
+  fs.chmodSync(cloudflaredPath, 0o755);
 }
 
 (async () => {
