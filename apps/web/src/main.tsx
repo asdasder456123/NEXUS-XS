@@ -766,6 +766,12 @@ function Home({ navigate }: {
       action: "Minecraft Bot",
     },
     {
+      icon: "🎵",
+      title: "Music",
+      text: "YouTube music player.",
+      action: "Music",
+    },
+    {
       icon: "✦",
       title: "NΞXUS XS AI",
       text: "AI-assisted development and technical workspace.",
@@ -1364,7 +1370,118 @@ function ChatPage() {
   );
 }
 
+
+function MusicPage() {
+  const [url, setUrl] = useState("");
+  const [videoId, setVideoId] = useState("");
+
+  function getYouTubeId(value: string) {
+    const input = value.trim();
+
+    if (/^[a-zA-Z0-9_-]{11}$/.test(input)) return input;
+
+    try {
+      const parsed = new URL(input);
+
+      if (parsed.hostname === "youtu.be") {
+        return parsed.pathname.slice(1).split("/")[0] || "";
+      }
+
+      if (
+        parsed.hostname === "youtube.com" ||
+        parsed.hostname === "www.youtube.com" ||
+        parsed.hostname === "m.youtube.com"
+      ) {
+        const id = parsed.searchParams.get("v");
+        if (id) return id;
+
+        const parts = parsed.pathname.split("/").filter(Boolean);
+
+        if (parts[0] === "shorts" || parts[0] === "embed") {
+          return parts[1] || "";
+        }
+      }
+    } catch {}
+
+    return "";
+  }
+
+  function play() {
+    setVideoId(getYouTubeId(url));
+  }
+
+  return (
+    <section className="service-page music-page">
+      <div className="eyebrow">NΞXUS XS MUSIC</div>
+
+      <div className="music-header">
+        <div>
+          <h1>YouTube Music</h1>
+          <p className="page-description">
+            شغّل أغاني YouTube مباشرة داخل NΞXUS XS.
+          </p>
+        </div>
+
+        <div className="music-status">
+          <span /> YouTube Player
+        </div>
+      </div>
+
+      <div className="music-search">
+        <input
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") play();
+          }}
+          placeholder="الصق رابط YouTube هنا..."
+        />
+
+        <button type="button" onClick={play} disabled={!url.trim()}>
+          ▶ تشغيل
+        </button>
+      </div>
+
+      {videoId ? (
+        <div className="music-player-shell">
+          <div className="music-player">
+            <iframe
+              src={`https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0`}
+              title="NΞXUS XS Music"
+              allow="autoplay; encrypted-media; picture-in-picture"
+              allowFullScreen
+            />
+          </div>
+
+          <div className="music-player-info">
+            <strong>Now Playing</strong>
+
+            <button type="button" onClick={() => setVideoId("")}>
+              إيقاف
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="music-empty">
+          <div className="music-empty-icon">♫</div>
+          <strong>ابدأ تشغيل أغنية</strong>
+          <p>الصق رابط YouTube واضغط تشغيل.</p>
+        </div>
+      )}
+
+      <div className="music-note">
+        <strong>🎵</strong>
+        <span>
+          واجهة YouTube جاهزة. ربط الصوت مع Discord Music Bot هنضيفه بعد كده.
+        </span>
+      </div>
+    </section>
+  );
+}
+
 function ServicePage({ section }: { section: Section }) {
+  if (section.name === "Music") return <MusicPage />;
+
   if (section.name === "Chat") {
     return <ChatPage />;
   }
