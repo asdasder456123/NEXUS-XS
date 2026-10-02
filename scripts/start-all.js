@@ -6,6 +6,8 @@ const http = require("node:http");
 const os = require("node:os");
 
 const children = new Map();
+let shuttingDown = false;
+let tunnelRestartTimer = null;
 
 function start(name, command, args, cwd) {
   console.log(`[${name}] Starting...`);
@@ -23,20 +25,66 @@ function start(name, command, args, cwd) {
   });
 
   child.stderr.on("data", (data) => {
-    process.stderr.write(`[${name}] ${data}`);
+    const text = data.toString();
+    process.stderr.write(`[${name}] ${text}`);
+
+    if (name === "QuickTunnel") {
+      const match = text.match(
+        /https:\/\/[a-z0-9-]+\.trycloudflare\.com/i
+      );
+
+      if (match) {
+        console.log(
+          `[QuickTunnel] PUBLIC URL: ${match[0]}`
+        );
+        console.log(
+          `[QuickTunnel] Forwarding to http://127.0.0.1:3000`
+        );
+      }
+    }
   });
 
   child.on("error", (error) => {
     console.error(`[${name}] Process error:`, error);
+
+    if (name === "QuickTunnel" && !shuttingDown) {
+      scheduleTunnelRestart();
+    }
   });
 
   child.on("exit", (code, signal) => {
     console.error(
       `[${name}] Stopped. code=${code ?? "null"} signal=${signal ?? "none"}`
     );
+
+    children.delete(name);
+
+    if (name === "QuickTunnel" && !shuttingDown) {
+      scheduleTunnelRestart();
+    }
   });
 
   console.log(`[${name}] Process started.`);
+
+  return child;
+}
+
+function scheduleTunnelRestart() {
+  if (tunnelRestartTimer || shuttingDown) {
+    return;
+  }
+
+  console.log(
+    "[QuickTunnel] Tunnel stopped. Retrying in 5 seconds..."
+  );
+
+  tunnelRestartTimer = setTimeout(async () => {
+    tunnelRestartTimer = null;
+
+    if (!shuttingDown) {
+      await startQuickTunnel();
+    }
+  }, 5000);
 }
 
 function waitForServer(url, attempts = 30) {
@@ -124,11 +172,13 @@ function downloadFile(url, destination) {
 
         if (response.statusCode !== 200) {
           response.resume();
+
           reject(
             new Error(
               `Download failed: HTTP ${response.statusCode}`
             )
           );
+
           return;
         }
 
@@ -182,6 +232,7 @@ async function ensureCloudflared() {
     fs.chmodSync(binary, 0o755);
 
     console.log("[QuickTunnel] cloudflared installed.");
+
     return binary;
   } catch (error) {
     try {
@@ -195,6 +246,10 @@ async function ensureCloudflared() {
 }
 
 async function startQuickTunnel() {
+  if (shuttingDown) {
+    return;
+  }
+
   try {
     const binary = await ensureCloudflared();
 
@@ -206,8 +261,14 @@ async function startQuickTunnel() {
       console.error(
         "[QuickTunnel] NEXUS did not become ready. Tunnel not started."
       );
+
+      scheduleTunnelRestart();
       return;
     }
+
+    console.log(
+      "[QuickTunnel] Creating a new temporary Cloudflare URL..."
+    );
 
     start(
       "QuickTunnel",
@@ -220,20 +281,17 @@ async function startQuickTunnel() {
       ],
       process.cwd()
     );
-
-    console.log(
-      "[QuickTunnel] Public temporary URL is being created..."
-    );
   } catch (error) {
     console.error(
       "[QuickTunnel] Failed:",
       error.message
     );
+
+    scheduleTunnelRestart();
   }
 }
 
 console.log("[NEXUS-XS] Starting unified runtime...");
-console.log("[NEXUS-XS] NEXUS runtime is running.");
 
 start(
   "NEXUS",
@@ -247,9 +305,20 @@ console.log("[NEXUS-XS] Unified runtime is alive.");
 startQuickTunnel();
 
 function shutdown(signal) {
+  if (shuttingDown) {
+    return;
+  }
+
+  shuttingDown = true;
+
   console.log(
     `[NEXUS-XS] Received ${signal}, stopping children...`
   );
+
+  if (tunnelRestartTimer) {
+    clearTimeout(tunnelRestartTimer);
+    tunnelRestartTimer = null;
+  }
 
   for (const [name, child] of children) {
     if (!child.killed) {
