@@ -4,8 +4,76 @@ const path = require("node:path");
 const https = require("node:https");
 const http = require("node:http");
 const os = require("node:os");
+require("dotenv").config({ path: path.join(process.cwd(), ".env") });
 
 const children = new Map();
+
+const DISCORD_TUNNEL_CHANNEL_IDS = (
+  process.env.DISCORD_TUNNEL_CHANNEL_IDS ||
+  "1545258351431127142,1547158553490493500,1423352888004186182"
+)
+  .split(",")
+  .map((id) => id.trim())
+  .filter(Boolean);
+
+let lastSentTunnelUrl = null;
+
+async function sendTunnelUrlToDiscord(url) {
+  const token = process.env.DISCORD_BOT_TOKEN?.trim();
+
+  if (!token) {
+    console.warn("[QuickTunnel] DISCORD_BOT_TOKEN is not configured.");
+    return;
+  }
+
+  if (!DISCORD_TUNNEL_CHANNEL_IDS.length) {
+    console.warn("[QuickTunnel] No Discord tunnel channels configured.");
+    return;
+  }
+
+  if (url === lastSentTunnelUrl) {
+    return;
+  }
+
+  lastSentTunnelUrl = url;
+
+  for (const channelId of DISCORD_TUNNEL_CHANNEL_IDS) {
+    try {
+      const response = await fetch(
+        `https://discord.com/api/v10/channels/${channelId}/messages`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bot ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            content:
+              `🌐 **NΞXUS XS — Quick Tunnel**\\n\\n${url}\\n\\n` +
+              `🔗 الرابط المؤقت الحالي للسيرفر.`,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const body = await response.text();
+        console.error(
+          `[QuickTunnel] Discord channel ${channelId} failed: HTTP ${response.status} ${body}`
+        );
+        continue;
+      }
+
+      console.log(
+        `[QuickTunnel] Tunnel URL sent to Discord channel ${channelId}`
+      );
+    } catch (error) {
+      console.error(
+        `[QuickTunnel] Failed sending URL to Discord channel ${channelId}:`,
+        error.message
+      );
+    }
+  }
+}
 let shuttingDown = false;
 let tunnelRestartTimer = null;
 
@@ -40,6 +108,13 @@ function start(name, command, args, cwd) {
         console.log(
           `[QuickTunnel] Forwarding to http://127.0.0.1:3000`
         );
+
+        sendTunnelUrlToDiscord(match[0]).catch((error) => {
+          console.error(
+            "[QuickTunnel] Discord notification failed:",
+            error.message
+          );
+        });
       }
     }
   });
