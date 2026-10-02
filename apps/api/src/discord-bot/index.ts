@@ -104,10 +104,8 @@ async function fetchMetadata(url: string) {
 export function startDiscordNewsBot(): Client | null {
   const { token, newsChannelId } = getDiscordConfig();
 
-  if (!token || !newsChannelId) {
-    console.warn(
-      "[Discord News] Missing DISCORD_BOT_TOKEN or DISCORD_NEWS_CHANNEL_ID",
-    );
+  if (!token) {
+    console.warn("[Discord] Missing DISCORD_BOT_TOKEN");
     return null;
   }
 
@@ -120,11 +118,19 @@ export function startDiscordNewsBot(): Client | null {
   });
 
   client.once(Events.ClientReady, (ready) => {
-    console.log(`[Discord News] Logged in as ${ready.user.tag}`);
-    console.log(`[Discord News] Listening on ${newsChannelId}`);
+    console.log(`[Discord] Logged in as ${ready.user.tag}`);
+
+    if (newsChannelId) {
+      console.log(`[Discord News] Listening on ${newsChannelId}`);
+    } else {
+      console.log("[Discord News] Disabled: DISCORD_NEWS_CHANNEL_ID is not set");
+    }
+
+    console.log("[Discord Verify] DM verification is ready");
   });
 
-  client.on(Events.MessageCreate, async (message) => {
+  if (newsChannelId) {
+    client.on(Events.MessageCreate, async (message) => {
     if (message.author.bot) return;
     if (message.channelId !== newsChannelId) return;
 
@@ -153,11 +159,14 @@ export function startDiscordNewsBot(): Client | null {
         await message.react("❌").catch(() => {});
       }
     }
-  });
+    });
+  }
 
   const processedVerificationChallenges = new Set<string>();
 
   setInterval(async () => {
+    if (!client.isReady()) return;
+
     const pending = getPendingDiscordVerifications();
 
     for (const item of pending) {
@@ -179,6 +188,10 @@ export function startDiscordNewsBot(): Client | null {
 
         await user.send(
           `NΞXUS XS verification code: ${code}\n\nهذا الكود صالح لمرة واحدة ولمدة قصيرة.`,
+        );
+
+        console.log(
+          `[Discord Verify] Code sent to Discord user ${item.discordId}`,
         );
       } catch (error) {
         console.error(
